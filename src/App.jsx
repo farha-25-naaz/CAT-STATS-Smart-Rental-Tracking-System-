@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { initialAssets } from './data/mockAssets';
 import LiveFlightMap from './components/LiveFlightMap';
 import FleetDashboard from './components/FleetDashboard';
+import AnalyticsAndForecast from './components/AnalyticsAndForecast';
 import CheckInOutModal from './components/CheckInOutModal';
 import SafetyLockoutModal from './components/SafetyLockoutModal';
 import { 
@@ -11,53 +12,29 @@ import {
   QrCode, 
   Building2, 
   AlertTriangle,
-  Radio
+  BarChart3
 } from 'lucide-react';
 
 export default function App() {
   const [assets, setAssets] = useState(initialAssets);
   const [selectedAsset, setSelectedAsset] = useState(assets[0]);
-  const [activeTab, setActiveTab] = useState('fleet'); // 'fleet' | 'map' | 'safety'
+  const [activeTab, setActiveTab] = useState('fleet'); // 'fleet' | 'map' | 'analytics' | 'safety'
   const [selectedSiteFilter, setSelectedSiteFilter] = useState('ALL');
   const [showEmergencyAlert, setShowEmergencyAlert] = useState(false);
   const [violatedAsset, setViolatedAsset] = useState(null);
   const [isCheckInOutOpen, setIsCheckInOutOpen] = useState(false);
 
-  // AUTOMATIC ANOMALY WATCHER
-  // Checks if any asset in the fleet hits a critical safety violation threshold
+  // Automatic Anomaly Watcher
   useEffect(() => {
     const criticalAsset = assets.find(
       a => a.status === 'CRITICAL_ALERT' || a.tiltAngle > 30 || (a.isAnomaly && a.speedKmH > 20)
     );
 
-    // If an automatic hazard is detected and alert isn't already active, trigger lockout
     if (criticalAsset && !showEmergencyAlert && !sessionStorage.getItem('dismissed_' + criticalAsset.id)) {
       setViolatedAsset(criticalAsset);
       setShowEmergencyAlert(true);
     }
   }, [assets]);
-
-  // AUTOMATIC LIVE DEMO TRIGGER (Fires automatically 12 seconds after loading to impress judges)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // Simulate live incoming sensor telemetry causing an auto-hazard on EQX1002
-      setAssets(prev => prev.map(a => {
-        if (a.id === 'EQX1002') {
-          return {
-            ...a,
-            status: 'CRITICAL_ALERT',
-            tiltAngle: 36.4,
-            speedKmH: 28.2,
-            isAnomaly: true,
-            anomaly: 'AUTOMATIC TRIGGER: Extreme Incline & Off-Site Geofence Breach'
-          };
-        }
-        return a;
-      }));
-    }, 12000); // 12 seconds after page load
-
-    return () => clearTimeout(timer);
-  }, []);
 
   const filteredAssetsBySite = assets.filter(a => {
     if (selectedSiteFilter === 'ALL') return true;
@@ -158,6 +135,23 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setActiveTab('analytics')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                activeTab === 'analytics'
+                  ? 'bg-[#FFCD11] text-black font-bold shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#1C1C1C]'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <BarChart3 className="w-4 h-4" />
+                <span>Analytics & Forecasting</span>
+              </div>
+              <span className="text-[10px] bg-[#FFCD11]/20 text-[#FFCD11] font-bold px-1.5 py-0.5 rounded">
+                ARIMA + NLP
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('safety')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'safety'
@@ -192,12 +186,12 @@ export default function App() {
 
       {/* 2. Main Content Dashboard */}
       <div className="flex-1 flex flex-col overflow-y-auto">
-        {/* Top Header Bar */}
         <header className="bg-[#141414] border-b border-[#242424] px-8 py-3.5 flex items-center justify-between sticky top-0 z-30">
           <div>
             <h2 className="text-sm font-bold text-white capitalize">
               {activeTab === 'fleet' && 'Rented Equipment Master Register'}
               {activeTab === 'map' && 'Live GPS Telemetry & Site Radar'}
+              {activeTab === 'analytics' && 'Fleet Telemetry Analytics, ARIMA Demand Forecast & NLP Intelligence'}
               {activeTab === 'safety' && 'Jobsite Safety Violations & Anomaly Logs'}
             </h2>
             <p className="text-[11px] text-neutral-400">
@@ -205,7 +199,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Status Quick Counters */}
           <div className="flex items-center space-x-3 text-xs">
             <div className="flex items-center space-x-1.5 bg-[#1C1C1C] border border-[#2B2B2B] px-3 py-1.5 rounded-lg text-neutral-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -238,6 +231,10 @@ export default function App() {
               selectedAsset={selectedAsset} 
               setSelectedAsset={setSelectedAsset} 
             />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AnalyticsAndForecast assets={filteredAssetsBySite} />
           )}
 
           {activeTab === 'safety' && (

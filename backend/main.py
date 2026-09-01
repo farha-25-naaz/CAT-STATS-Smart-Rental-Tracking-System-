@@ -14,6 +14,7 @@ from models import (
     DayUsage,
     LiveAsset,
 )
+from ingest_routes import router as ingest_router
 from scheduler import start_scheduler
 
 _scheduler = None
@@ -36,6 +37,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(ingest_router)
 
 
 def _now_iso() -> str:

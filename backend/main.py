@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import supabase
@@ -16,6 +16,7 @@ from models import (
 )
 from ingest_routes import router as ingest_router
 from scheduler import start_scheduler
+from websocket_manager import manager
 
 _scheduler = None
 
@@ -56,6 +57,19 @@ def _get_asset_or_404(asset_id: str) -> dict:
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
+
+@app.websocket("/ws/live")
+async def ws_live(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # We don't act on inbound messages; this loop only detects disconnect.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:  # noqa: BLE001 - any transport error means the client is gone
+        manager.disconnect(websocket)
 
 
 @app.get("/assets/live", response_model=List[LiveAsset])

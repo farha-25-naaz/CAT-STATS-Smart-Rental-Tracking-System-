@@ -1,18 +1,34 @@
 """Phase 2 ingest endpoints — receive outputs from the ML pipeline
 (AnomalyDetector, MaintenanceRiskModel, NLSummarizer)."""
 
+import math
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
 from db import supabase
 from models import AnomalyIngest, RiskIngest, SummaryIngest, TelemetryIngest
+from websocket_manager import manager
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance between two lat/lng points, in metres."""
+    r = 6371000.0  # mean Earth radius, metres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * r * math.asin(math.sqrt(a))
 
 
 def _get_asset_or_404(asset_id: str) -> dict:
@@ -38,8 +54,8 @@ def _last_telemetry(asset_id: str) -> dict:
 
 
 @router.post("/telemetry")
-def ingest_telemetry(body: TelemetryIngest):
-    _get_asset_or_404(body.asset_id)
+async def ingest_telemetry(body: TelemetryIngest):
+    asset = _get_asset_or_404(body.asset_id)
     prev = _last_telemetry(body.asset_id)
 
     def carry(field: str, payload_value):
@@ -61,8 +77,32 @@ def ingest_telemetry(body: TelemetryIngest):
     }
     inserted = supabase.table("telemetry_logs").insert(row).execute().data[0]
 
+    # --- Geofence breach: caller-supplied flag OR server-side centroid check ---
+    is_geofence_breach = bool(body.is_geofence_breach)
+    site_id = asset.get("current_site_id")
+    if site_id:
+        site_rows = (
+            supabase.table("sites")
+            .select("center_lat,center_lng,geofence_radius_meters")
+            .eq("site_id", site_id)
+            .execute()
+            .data
+        ) or []
+        site = site_rows[0] if site_rows else {}
+        center_lat = site.get("center_lat")
+        center_lng = site.get("center_lng")
+        radius = site.get("geofence_radius_meters")
+        if center_lat is not None and center_lng is not None and radius is not None:
+            distance_m = haversine_distance(
+                body.lat, body.lng, center_lat, center_lng
+            )
+            if distance_m > radius:
+                is_geofence_breach = True
+    # No current_site_id -> can't breach a geofence you're not assigned to.
+    # That's UNAUTHORIZED_MOVEMENT, handled by the ML layer separately.
+
     alert = None
-    if body.is_geofence_breach:
+    if is_geofence_breach:
         alert = (
             supabase.table("alerts")
             .insert(
@@ -81,12 +121,16 @@ def ingest_telemetry(body: TelemetryIngest):
                 "asset_id", body.asset_id
             ).execute()
 
-    # Phase 3 will broadcast this over WebSocket; for now just return it.
+    payload = body.model_dump(mode="json")
+    payload["event"] = "TELEMETRY"
+    payload["is_geofence_breach"] = is_geofence_breach
+    await manager.broadcast(payload)
+
     return {"telemetry": inserted, "alert": alert}
 
 
 @router.post("/anomaly")
-def ingest_anomaly(body: AnomalyIngest):
+async def ingest_anomaly(body: AnomalyIngest):
     _get_asset_or_404(body.asset_id)
 
     severity = "CRITICAL" if body.anomaly_type.value == "SAFETY_HAZARD" else "HIGH"
@@ -109,6 +153,14 @@ def ingest_anomaly(body: AnomalyIngest):
         supabase.table("assets").update({"status": "SAFETY_LOCKOUT"}).eq(
             "asset_id", body.asset_id
         ).execute()
+        await manager.broadcast(
+            {
+                "event": "SAFETY_LOCKOUT",
+                "asset_id": body.asset_id,
+                "anomaly_type": body.anomaly_type.value,
+                "reason": body.reason,
+            }
+        )
 
     last = _last_telemetry(body.asset_id)
     if last:

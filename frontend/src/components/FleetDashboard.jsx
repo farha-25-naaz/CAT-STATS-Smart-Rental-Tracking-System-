@@ -32,7 +32,8 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
   });
 
   // Calculate high-level summary metrics
-  const totalRented = assets.length;
+  // "Rented" = currently dispatched, i.e. anything not sitting UNASSIGNED in the yard.
+  const totalRented = assets.filter(a => (a.rawStatus || a.status) !== 'UNASSIGNED').length;
   const totalIdleHours = assets.reduce((acc, a) => acc + (a.idleHours || a.idleHoursPerDay || 0), 0);
   const totalEngineHours = assets.reduce((acc, a) => acc + (a.engineHours || a.engineHoursPerDay || 0), 0);
   const wastedFuelCost = (totalIdleHours * 22.5).toFixed(0); // Estimated $22.50/hr idle burn

@@ -111,6 +111,22 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
     });
   }, [assets]);
 
+  // When an asset is picked elsewhere (e.g. the Rented Assets table), fly to it
+  // and flash the locator ring once — no manual re-centre needed.
+  useEffect(() => {
+    if (!selectedAsset?.id) return undefined;
+    const onMap = liveAssets.find((a) => a.id === selectedAsset.id);
+    const target = onMap?.coords
+      || (Array.isArray(selectedAsset.coords) ? selectedAsset.coords : null);
+    if (!target) return undefined;
+
+    setMapCenter(target);
+    setHighlightCoords(target);
+    const t = setTimeout(() => setHighlightCoords(null), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAsset?.id]);
+
   // Gentle local motion so ACTIVE machines visibly move between backend frames.
   useEffect(() => {
     const interval = setInterval(() => {

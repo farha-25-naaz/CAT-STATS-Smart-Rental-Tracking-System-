@@ -7,6 +7,7 @@ import AnalyticsAndForecast from './components/AnalyticsAndForecast';
 import CheckInOutModal from './components/CheckInOutModal';
 import SafetyLockoutModal from './components/SafetyLockoutModal';
 import CatLogo from './components/CatLogo';
+import AssetQrSheet from './components/AssetQrSheet';
 import { 
   ShieldAlert, 
   Layers, 
@@ -216,6 +217,20 @@ export default function App() {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab('qr')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                activeTab === 'qr'
+                  ? 'bg-[#FFCD11] text-black font-bold shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#181818]'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <QrCode className="w-4 h-4" />
+                <span>Asset QR Codes</span>
+              </div>
+            </button>
           </nav>
         </div>
 
@@ -299,6 +314,10 @@ export default function App() {
 
           {activeTab === 'analytics' && (
             <AnalyticsAndForecast assets={filteredAssetsBySite} />
+          )}
+
+          {activeTab === 'qr' && (
+            <AssetQrSheet assets={assets} />
           )}
 
           {activeTab === 'safety' && (

@@ -5,9 +5,24 @@ import {
   ShieldCheck,
   ArrowUpRight,
   ArrowDownLeft,
-  Camera
+  Camera,
+  CheckCircle2
 } from 'lucide-react';
 import { checkOutAsset, checkInAsset } from '../api/endpoints';
+import QrScanner from './QrScanner';
+
+// A tag encodes either the bare id ("EXC-101") or {"asset_id":"EXC-101"}.
+function parseAssetCode(raw) {
+  const text = (raw || '').trim();
+  if (!text) return null;
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj === 'object' && obj.asset_id) return String(obj.asset_id).trim();
+  } catch {
+    /* not JSON — treat as a plain id */
+  }
+  return text;
+}
 
 export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = [], onUpdateAsset, onCommitted }) {
   if (!isOpen) return null;
@@ -24,6 +39,9 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [qrScanned, setQrScanned] = useState(false);
+  const [manualCode, setManualCode] = useState('');
+  const [cameraOn, setCameraOn] = useState(false);
+  const [scanNote, setScanNote] = useState('');
   
   const [checklist, setChecklist] = useState({
     brakesAndSteering: false,
@@ -35,17 +53,49 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
   const selectedAsset = assets.find(a => a.id === selectedAssetId) || assets[0];
   const allChecklistPassed = Object.values(checklist).every(Boolean);
 
+  // An asset can only be dispatched when it is currently UNASSIGNED, and can
+  // only be returned when it is currently out (anything other than UNASSIGNED).
+  const assetStatus = selectedAsset?.rawStatus;
+  const canCheckOut = !selectedAsset || assetStatus === 'UNASSIGNED';
+  const canCheckIn = !selectedAsset || assetStatus !== 'UNASSIGNED';
+  const modeAllowed = mode === 'CHECK_OUT' ? canCheckOut : canCheckIn;
+  const modeBlockReason = modeAllowed
+    ? ''
+    : mode === 'CHECK_OUT'
+      ? `${selectedAsset?.id} is already out (${assetStatus}). It must be checked in first.`
+      : `${selectedAsset?.id} is not currently checked out (${assetStatus}).`;
+
   const handleToggleChecklist = (key) => {
     setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSimulateQRScan = () => {
+  const resolveScannedCode = (raw) => {
+    const id = parseAssetCode(raw);
+    if (!id) {
+      setScanNote('Could not read a code.');
+      return;
+    }
+    const match = assets.find((a) => a.id === id);
+    setSelectedAssetId(id);
     setQrScanned(true);
+    setCameraOn(false);
+    if (!match) {
+      setScanNote(`Scanned "${id}" — not in the current fleet list, proceeding anyway.`);
+      return;
+    }
+    // Auto-pick the transaction from the asset's current state.
+    const nextMode = match.rawStatus === 'UNASSIGNED' ? 'CHECK_OUT' : 'CHECK_IN';
+    setMode(nextMode);
+    setScanNote(`Verified tag: ${id} — ${match.name}. ${nextMode === 'CHECK_OUT' ? 'Ready to dispatch.' : 'Ready to return.'}`);
   };
 
   const handleSubmitTransaction = async (e) => {
     e.preventDefault();
     setApiError(null);
+    if (!modeAllowed) {
+      setApiError(modeBlockReason);
+      return;
+    }
     if (mode === 'CHECK_OUT' && !allChecklistPassed) {
       setApiError('Safety Violation: complete all pre-operation inspection checks.');
       return;
@@ -119,11 +169,14 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
           <div className="grid grid-cols-2 gap-2 bg-[#111111] p-1 rounded-xl border border-[#2B2B2B]">
             <button
               type="button"
-              onClick={() => setMode('CHECK_OUT')}
-              className={`flex items-center justify-center py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                mode === 'CHECK_OUT' 
-                  ? 'bg-[#FFCD11] text-black shadow-md' 
-                  : 'text-neutral-400 hover:text-white'
+              onClick={() => { setMode('CHECK_OUT'); setApiError(null); }}
+              disabled={!canCheckOut}
+              className={`flex items-center justify-center py-2.5 rounded-lg text-xs font-bold transition ${
+                !canCheckOut
+                  ? 'text-neutral-600 cursor-not-allowed'
+                  : mode === 'CHECK_OUT'
+                    ? 'bg-[#FFCD11] text-black shadow-md cursor-pointer'
+                    : 'text-neutral-400 hover:text-white cursor-pointer'
               }`}
             >
               <ArrowUpRight className="w-4 h-4 mr-1.5" />
@@ -131,17 +184,27 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
             </button>
             <button
               type="button"
-              onClick={() => setMode('CHECK_IN')}
-              className={`flex items-center justify-center py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                mode === 'CHECK_IN' 
-                  ? 'bg-[#FFCD11] text-black shadow-md' 
-                  : 'text-neutral-400 hover:text-white'
+              onClick={() => { setMode('CHECK_IN'); setApiError(null); }}
+              disabled={!canCheckIn}
+              className={`flex items-center justify-center py-2.5 rounded-lg text-xs font-bold transition ${
+                !canCheckIn
+                  ? 'text-neutral-600 cursor-not-allowed'
+                  : mode === 'CHECK_IN'
+                    ? 'bg-[#FFCD11] text-black shadow-md cursor-pointer'
+                    : 'text-neutral-400 hover:text-white cursor-pointer'
               }`}
             >
               <ArrowDownLeft className="w-4 h-4 mr-1.5" />
               Check-In (Return)
             </button>
           </div>
+
+          {selectedAsset && (
+            <div className="text-[11px] text-neutral-400 -mt-2">
+              {selectedAsset.id} is currently <span className="font-bold text-neutral-200">{assetStatus}</span>
+              {modeBlockReason && <span className="text-amber-400"> — {modeBlockReason}</span>}
+            </div>
+          )}
 
           <form onSubmit={handleSubmitTransaction} className="space-y-4 text-xs">
             <div>
@@ -164,30 +227,56 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
               </select>
             </div>
 
-            {/* QR Scanner Simulation */}
-            <div className="bg-[#111111] border border-[#2B2B2B] rounded-xl p-3.5 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`p-2.5 rounded-lg ${qrScanned ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-600/40' : 'bg-neutral-800 text-neutral-400'}`}>
-                  <Camera className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-bold text-white">QR Machine Tag Verification</div>
-                  <div className="text-[11px] text-neutral-400">
-                    {qrScanned ? `✓ Verified Tag for ${selectedAssetId}` : 'Scan required before ignition'}
+            {/* QR machine-tag verification: camera scan, or type/paste the code */}
+            <div className="bg-[#111111] border border-[#2B2B2B] rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2.5 rounded-lg ${qrScanned ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-600/40' : 'bg-neutral-800 text-neutral-400'}`}>
+                    {qrScanned ? <CheckCircle2 className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <div className="font-bold text-white">QR Machine Tag Verification</div>
+                    <div className="text-[11px] text-neutral-400">
+                      {qrScanned ? `Verified tag for ${selectedAssetId}` : 'Scan the tag, or enter the code below'}
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => { setCameraOn((v) => !v); setScanNote(''); }}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
+                    cameraOn ? 'bg-neutral-800 text-neutral-300 border border-neutral-600' : 'bg-[#FFCD11] hover:bg-[#E5B80E] text-black'
+                  }`}
+                >
+                  {cameraOn ? 'Stop Camera' : 'Scan with Camera'}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleSimulateQRScan}
-                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
-                  qrScanned 
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                    : 'bg-[#FFCD11] hover:bg-[#E5B80E] text-black'
-                }`}
-              >
-                {qrScanned ? 'Tag Verified' : 'Simulate Scan'}
-              </button>
+
+              {cameraOn && (
+                <QrScanner
+                  onDecode={resolveScannedCode}
+                  onError={() => setScanNote('No camera available — type or paste the asset code instead.')}
+                />
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  placeholder="Enter asset code e.g. EXC-101"
+                  className="flex-1 bg-[#0D0D0D] border border-[#333] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-[#FFCD11]"
+                />
+                <button
+                  type="button"
+                  onClick={() => resolveScannedCode(manualCode)}
+                  className="px-3 py-2 rounded-lg bg-[#1F1F1F] hover:bg-[#2A2A2A] border border-[#333] text-neutral-200 font-bold text-xs cursor-pointer"
+                >
+                  Use Code
+                </button>
+              </div>
+
+              {scanNote && <div className="text-[11px] text-emerald-300/90">{scanNote}</div>}
             </div>
 
             {mode === 'CHECK_OUT' && (
@@ -290,11 +379,11 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={submitting || (mode === 'CHECK_OUT' && !allChecklistPassed)}
-                className={`w-full py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center cursor-pointer ${
-                  submitting || (mode === 'CHECK_OUT' && !allChecklistPassed)
+                disabled={submitting || !modeAllowed || (mode === 'CHECK_OUT' && !allChecklistPassed)}
+                className={`w-full py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center ${
+                  submitting || !modeAllowed || (mode === 'CHECK_OUT' && !allChecklistPassed)
                     ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700'
-                    : 'bg-[#FFCD11] hover:bg-[#E5B80E] text-black'
+                    : 'bg-[#FFCD11] hover:bg-[#E5B80E] text-black cursor-pointer'
                 }`}
               >
                 {submitting

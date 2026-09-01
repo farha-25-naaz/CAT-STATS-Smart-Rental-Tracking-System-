@@ -91,46 +91,39 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
   const [liveAssets, setLiveAssets] = useState([]);
   const [highlightCoords, setHighlightCoords] = useState(null);
 
+  // Seed / re-sync from the real fleet. Only assets with a known position render.
   useEffect(() => {
-    const initialCoords = [
-      { id: 'EQX1001', name: 'Cat 320 Hydraulic Excavator', type: 'Excavator', status: 'ACTIVE', base: [12.9716, 77.5946], speedKmH: 14, tiltAngle: 4.2, fuelPct: 82, productiveHours: 1149.3, idleHours: 191.4, healthScore: 94 },
-      { id: 'EQX1002', name: 'Cat 777 Heavy Crane', type: 'Crane', status: 'CRITICAL_ALERT', base: [12.9780, 77.5990], speedKmH: 18, tiltAngle: 34.8, fuelPct: 42, productiveHours: 920.1, idleHours: 320.5, healthScore: 78, isAnomaly: true, anomaly: 'Critical Tilt Hazard (34.8°) & Boundary Warning' },
-      { id: 'EQX1003', name: 'Cat D6 Track Bulldozer', type: 'Bulldozer', status: 'ACTIVE', base: [12.9650, 77.5880], speedKmH: 11, tiltAngle: 2.1, fuelPct: 88, productiveHours: 1420.0, idleHours: 45.2, healthScore: 96 },
-      { id: 'EQX1004', name: 'Cat 950 Wheel Loader', type: 'Loader', status: 'IDLE_WARNING', base: [12.9740, 77.5850], speedKmH: 0, tiltAngle: 1.2, fuelPct: 64, productiveHours: 850.5, idleHours: 240.8, healthScore: 89, isAnomaly: true, anomaly: 'High Idle Ratio detected on current shift' }
-    ];
-
-    const merged = initialCoords.map((item) => {
-      const live = assets.find(a => a.id === item.id) || {};
-      return {
-        ...item,
-        ...live,
-        coords: item.base,
-        trail: [item.base]
-      };
+    setLiveAssets((prev) => {
+      const prevById = Object.fromEntries(prev.map((a) => [a.id, a]));
+      return assets
+        .filter((a) => Array.isArray(a.coords) && a.coords.length === 2)
+        .map((a) => {
+          const existing = prevById[a.id];
+          return {
+            ...a,
+            productiveHours: a.engineHours,
+            fuelPct: a.fuelLevel,
+            healthScore: a.riskScore != null ? Math.round((1 - a.riskScore) * 100) : 92,
+            // keep the locally accumulated trail across re-syncs
+            trail: existing?.trail?.length ? [...existing.trail.slice(-11), a.coords] : [a.coords],
+          };
+        });
     });
+  }, [assets]);
 
-    setLiveAssets(merged);
-  }, []);
-
-  // 2-Second Telemetry Motion Engine
+  // Gentle local motion so ACTIVE machines visibly move between backend frames.
   useEffect(() => {
     const interval = setInterval(() => {
-      setLiveAssets(prevAssets => 
+      setLiveAssets(prevAssets =>
         prevAssets.map(asset => {
-          if (asset.status === 'IDLE_WARNING') return asset;
+          if (asset.status !== 'ACTIVE' || !Array.isArray(asset.coords)) return asset;
 
-          const deltaLat = (Math.random() - 0.5) * 0.0006;
-          const deltaLng = (Math.random() - 0.5) * 0.0006;
+          const deltaLat = (Math.random() - 0.5) * 0.0004;
+          const deltaLng = (Math.random() - 0.5) * 0.0004;
           const newCoords = [asset.coords[0] + deltaLat, asset.coords[1] + deltaLng];
           const updatedTrail = [...(asset.trail || []), newCoords].slice(-8);
 
-          return {
-            ...asset,
-            coords: newCoords,
-            trail: updatedTrail,
-            speedKmH: Math.floor(8 + Math.random() * 12),
-            tiltAngle: asset.status === 'CRITICAL_ALERT' ? 34.8 : Number((2 + Math.random() * 3).toFixed(1))
-          };
+          return { ...asset, coords: newCoords, trail: updatedTrail };
         })
       );
     }, 2000);

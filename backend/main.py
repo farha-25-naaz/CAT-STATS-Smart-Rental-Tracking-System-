@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -14,7 +15,9 @@ from models import (
     DayUsage,
     LiveAsset,
 )
+from catalog_routes import router as catalog_router
 from demo_routes import router as demo_router
+from forecast_routes import router as forecast_router
 from ingest_routes import router as ingest_router
 from ml_orchestration import load_or_train_models, refresh_site_centroids
 from ml_routes import router as ml_router
@@ -46,9 +49,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CAT-STATS Smart Rental Tracking System", lifespan=lifespan)
 
+# Comma-separated list in CORS_ALLOW_ORIGINS, or "*" to allow any (dev default).
+_cors_env = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+_cors_origins = ["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -57,6 +64,8 @@ app.include_router(ingest_router)
 app.include_router(safety_router)
 app.include_router(ml_router)
 app.include_router(demo_router)
+app.include_router(catalog_router)
+app.include_router(forecast_router)
 
 
 def _now_iso() -> str:
@@ -89,32 +98,82 @@ async def ws_live(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
+def _latest_by_asset(rows: List[dict], order_key: str) -> dict:
+    """Collapse a DESC-ordered row list to {asset_id: first (=newest) row}."""
+    latest: dict = {}
+    for row in rows:
+        aid = row.get("asset_id")
+        if aid and aid not in latest:
+            latest[aid] = row
+    return latest
+
+
 @app.get("/assets/live", response_model=List[LiveAsset])
 def assets_live():
     assets = (supabase.table("assets").select("*").execute().data) or []
 
+    sites = (supabase.table("sites").select("*").execute().data) or []
+    site_by_id = {s["site_id"]: s for s in sites}
+
+    risk_rows = (
+        supabase.table("maintenance_risk").select("*").execute().data
+    ) or []
+    risk_by_asset = {r["asset_id"]: r for r in risk_rows}
+
+    tele_rows = (
+        supabase.table("telemetry_logs")
+        .select("*")
+        .order("recorded_at", desc=True)
+        .limit(5000)
+        .execute()
+        .data
+    ) or []
+    tele_by_asset = _latest_by_asset(tele_rows, "recorded_at")
+
+    alert_rows = (
+        supabase.table("alerts")
+        .select("*")
+        .is_("resolved_at", "null")
+        .order("triggered_at", desc=True)
+        .limit(2000)
+        .execute()
+        .data
+    ) or []
+    alert_by_asset = _latest_by_asset(alert_rows, "triggered_at")
+
     result: List[LiveAsset] = []
     for asset in assets:
-        latest = (
-            supabase.table("telemetry_logs")
-            .select("lat,lng,recorded_at")
-            .eq("asset_id", asset["asset_id"])
-            .order("recorded_at", desc=True)
-            .limit(1)
-            .execute()
-            .data
-        ) or []
-        tele = latest[0] if latest else {}
+        aid = asset["asset_id"]
+        tele = tele_by_asset.get(aid, {})
+        alert = alert_by_asset.get(aid, {})
+        risk = risk_by_asset.get(aid, {})
+        site = site_by_id.get(asset.get("current_site_id"), {})
         result.append(
             LiveAsset(
-                asset_id=asset["asset_id"],
+                asset_id=aid,
                 type=asset.get("type"),
                 status=asset.get("status"),
                 current_site_id=asset.get("current_site_id"),
+                site_name=site.get("site_name"),
                 current_operator_id=asset.get("current_operator_id"),
+                check_out_date=asset.get("check_out_date"),
                 check_in_date=asset.get("check_in_date"),
                 lat=tele.get("lat"),
                 lng=tele.get("lng"),
+                recorded_at=tele.get("recorded_at"),
+                speed_kmh=tele.get("speed_kmh"),
+                tilt_angle_deg=tele.get("tilt_angle_deg"),
+                engine_hours=tele.get("engine_hours"),
+                idle_hours=tele.get("idle_hours"),
+                fuel_level_pct=tele.get("fuel_level_pct"),
+                is_anomaly=tele.get("is_anomaly"),
+                latest_anomaly_type=alert.get("type"),
+                latest_anomaly_reason=alert.get("summary"),
+                latest_anomaly_severity=alert.get("severity"),
+                risk_tier=risk.get("risk_tier"),
+                risk_score=risk.get("risk_score"),
+                rental_rate_per_day=asset.get("rental_rate_per_day"),
+                idle_cost_per_hour=asset.get("idle_cost_per_hour"),
             )
         )
     return result

@@ -1,47 +1,76 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShieldAlert, 
-  AlertTriangle, 
-  Lock, 
-  KeyRound, 
-  Radio, 
-  CheckCircle2, 
-  PhoneCall, 
-  FileWarning 
+import {
+  ShieldAlert,
+  AlertTriangle,
+  Lock,
+  KeyRound,
+  Radio,
+  CheckCircle2,
+  PhoneCall,
+  FileWarning,
+  X
 } from 'lucide-react';
 
-export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset }) {
+import { safetyOverride } from '../api/endpoints';
+
+const DEMO_SUPERVISOR_ID = 'SUP-001'; // TODO: replace with real company login
+
+export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onCleared }) {
   if (!isOpen) return null;
 
   const [overridePin, setOverridePin] = useState('');
+  const [supervisorId, setSupervisorId] = useState(DEMO_SUPERVISOR_ID);
   const [errorMessage, setErrorMessage] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
   const [isResolved, setIsResolved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        setErrorMessage('Emergency Lockout: Escape key disabled. Supervisor PIN override required.');
+        onClose?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onClose]);
 
-  const handleResolveAlert = (e) => {
+  const handleResolveAlert = async (e) => {
     e.preventDefault();
-    if (overridePin === 'CAT911' || overridePin === '9999' || overridePin.length >= 4) {
+    setErrorMessage('');
+    const assetId = (violatedAsset && violatedAsset.id) || null;
+    if (!assetId) {
+      setErrorMessage('No asset context for this lockout.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await safetyOverride({
+        asset_id: assetId,
+        supervisor_id: supervisorId,
+        pin: overridePin,
+        resolution_note: resolutionNote,
+        resume_status: 'ACTIVE',
+      });
       setIsResolved(true);
+      onCleared?.(assetId);
       setTimeout(() => {
         setIsResolved(false);
         setOverridePin('');
-        setErrorMessage('');
         setResolutionNote('');
         onClose();
       }, 1200);
-    } else {
-      setErrorMessage('Invalid PIN. Enter 4-digit PIN (e.g. 9999 or CAT911)');
+    } catch (err) {
+      if (err.status === 401) {
+        setErrorMessage('Invalid supervisor ID or PIN.');
+      } else if (err.status === 409) {
+        setErrorMessage('This asset is not in a lockout state — nothing to override. You can close this dialog.');
+      } else {
+        setErrorMessage(err.message || 'Override failed');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -69,9 +98,19 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset }) {
               </p>
             </div>
           </div>
-          <div className="flex items-center bg-red-950 text-red-200 px-2.5 py-1 rounded-lg border border-red-800 text-[10px] font-mono font-bold">
-            <Radio className="w-3 h-3 mr-1 animate-ping text-red-400" />
-            LOCKED
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center bg-red-950 text-red-200 px-2.5 py-1 rounded-lg border border-red-800 text-[10px] font-mono font-bold">
+              <Radio className="w-3 h-3 mr-1 animate-ping text-red-400" />
+              LOCKED
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="p-1 rounded-lg bg-red-800/60 hover:bg-red-700 text-white transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -123,9 +162,20 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset }) {
               </div>
 
               <div>
+                <label className="block text-neutral-300 font-bold mb-1">Supervisor ID</label>
+                <input
+                  type="text"
+                  value={supervisorId}
+                  onChange={(e) => { setSupervisorId(e.target.value); setErrorMessage(''); }}
+                  className="w-full bg-[#111] border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-red-500"
+                  required
+                />
+              </div>
+
+              <div>
                 <label className="block text-neutral-300 font-bold mb-1 flex items-center justify-between">
                   <span>Enter Authorization PIN to Unlock</span>
-                  <span className="text-[10px] text-neutral-500 font-normal">PIN: 9999 or CAT911</span>
+                  <span className="text-[10px] text-neutral-500 font-normal">demo: SUP-001 / 1234</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -152,10 +202,11 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset }) {
               <div className="pt-2 flex items-center space-x-2">
                 <button
                   type="submit"
-                  className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-2.5 rounded-xl transition shadow-lg flex items-center justify-center cursor-pointer tracking-wider uppercase text-xs"
+                  disabled={submitting}
+                  className="w-full bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 text-white font-black py-2.5 rounded-xl transition shadow-lg flex items-center justify-center cursor-pointer tracking-wider uppercase text-xs"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  Authorize Override & Unlock
+                  {submitting ? 'Authorizing…' : 'Authorize Override & Unlock'}
                 </button>
               </div>
             </form>

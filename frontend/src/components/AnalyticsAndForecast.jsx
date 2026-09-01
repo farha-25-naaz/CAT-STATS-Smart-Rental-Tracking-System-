@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getForecast, generateAssetSummary } from '../api/endpoints';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -38,6 +39,47 @@ ChartJS.register(
 
 export default function AnalyticsAndForecast({ assets }) {
   const [forecastHorizon, setForecastHorizon] = useState('14'); // 14 or 30 days
+  const [forecast, setForecast] = useState(null);
+  const [forecastError, setForecastError] = useState(null);
+  const [aiBriefing, setAiBriefing] = useState(null);
+
+  // Pick a representative site from the current fleet for the forecast.
+  const focusSiteId = useMemo(
+    () => assets.find((a) => a.siteId)?.siteId || 'S001',
+    [assets],
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const horizon = forecastHorizon === '30' ? 30 : 14;
+    Promise.all([
+      getForecast({ siteId: focusSiteId, equipmentType: 'Excavator', horizon }, { signal: ctrl.signal }),
+      getForecast({ siteId: focusSiteId, equipmentType: 'Bulldozer', horizon }, { signal: ctrl.signal }),
+    ])
+      .then(([exc, bld]) => {
+        setForecast({
+          excavator: exc.forecasts[0]?.predicted_demand || [],
+          bulldozer: bld.forecasts[0]?.predicted_demand || [],
+          confidence: exc.forecasts[0]?.confidence,
+        });
+        setForecastError(null);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') setForecastError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [focusSiteId, forecastHorizon]);
+
+  // Natural-language briefing for the highest-risk / most-idle asset.
+  useEffect(() => {
+    const target = [...assets].sort((a, b) => (b.idleHours || 0) - (a.idleHours || 0))[0];
+    if (!target) return undefined;
+    const ctrl = new AbortController();
+    generateAssetSummary(target.id, { signal: ctrl.signal })
+      .then((res) => setAiBriefing({ assetId: target.id, ...res.summary }))
+      .catch(() => setAiBriefing(null));
+    return () => ctrl.abort();
+  }, [assets]);
 
   // 1. Chart.js Data: Engine Runtime vs Idle Hours per Rented Asset
   const assetLabels = assets.map(a => a.id);
@@ -91,13 +133,12 @@ export default function AnalyticsAndForecast({ assets }) {
     }
   };
 
-  // 2. Chart.js Data: ARIMA Demand Forecasting for Upcoming Site Requirements
-  const forecastDays = forecastHorizon === '14' 
-    ? ['Day 1', 'Day 3', 'Day 5', 'Day 7', 'Day 9', 'Day 11', 'Day 14']
-    : ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-
-  const predictedExcavatorDemand = forecastHorizon === '14' ? [4, 5, 6, 7, 6, 8, 9] : [18, 22, 28, 31];
-  const predictedBulldozerDemand = forecastHorizon === '14' ? [2, 3, 3, 4, 4, 5, 5] : [10, 12, 14, 16];
+  // 2. Chart.js Data: ARIMA Demand Forecasting (live from the backend model)
+  const excSeries = forecast?.excavator || [];
+  const bldSeries = forecast?.bulldozer || [];
+  const forecastDays = excSeries.map((_, i) => `Day ${i + 1}`);
+  const predictedExcavatorDemand = excSeries.map((p) => p.units_needed);
+  const predictedBulldozerDemand = bldSeries.map((p) => p.units_needed);
 
   const demandForecastData = {
     labels: forecastDays,
@@ -182,23 +223,16 @@ export default function AnalyticsAndForecast({ assets }) {
 
         {/* Generated Natural Language Summary */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div className="bg-[#141414]/90 border border-neutral-800 p-3.5 rounded-xl">
+          <div className="bg-[#141414]/90 border border-neutral-800 p-3.5 rounded-xl md:col-span-2">
             <div className="flex items-center text-amber-400 font-bold mb-1">
               <AlertTriangle className="w-4 h-4 mr-1.5" />
-              Idle Cost Waste Detected
+              {aiBriefing ? `Fleet Briefing — ${aiBriefing.assetId}` : 'Idle Cost Analysis'}
             </div>
             <p className="text-neutral-300 text-[11px] leading-relaxed">
-              Excavator <strong className="text-white">EQX1001</strong> logged <strong>10.0 idle hours</strong> vs only <strong>1.5 engine hours</strong>. Reallocating or returning this unit can save an estimated <strong>$225.00/day</strong>.
-            </p>
-          </div>
-
-          <div className="bg-[#141414]/90 border border-neutral-800 p-3.5 rounded-xl">
-            <div className="flex items-center text-emerald-400 font-bold mb-1">
-              <CheckCircle2 className="w-4 h-4 mr-1.5" />
-              High Efficiency Asset
-            </div>
-            <p className="text-neutral-300 text-[11px] leading-relaxed">
-              Bulldozer <strong className="text-white">EQX1003</strong> operating at <strong>93.7% peak efficiency</strong> with 7.5 engine hours at Bangalore Quarry S003. Optimal benchmark.
+              {aiBriefing?.summary
+                || `Tracking ${assets.length} rented units. ${
+                     assets.filter((a) => a.status === 'IDLE_WARNING').length
+                   } flagged for high idle ratio; generating a natural-language digest…`}
             </p>
           </div>
 
@@ -208,7 +242,11 @@ export default function AnalyticsAndForecast({ assets }) {
               ARIMA Demand Prediction
             </div>
             <p className="text-neutral-300 text-[11px] leading-relaxed">
-              Excavator demand is projected to spike by <strong>+35%</strong> over the next 14 days at Site S006. Pre-book 2 additional hydraulic units to prevent delays.
+              {forecastError
+                ? `Forecast unavailable: ${forecastError}`
+                : predictedExcavatorDemand.length
+                  ? `Excavator demand at ${focusSiteId} projected between ${Math.min(...predictedExcavatorDemand)}–${Math.max(...predictedExcavatorDemand)} units/day over the next ${forecastHorizon} days (model confidence ${(forecast?.confidence ?? 0) * 100}%).`
+                  : 'Loading ARIMA forecast…'}
             </p>
           </div>
         </div>

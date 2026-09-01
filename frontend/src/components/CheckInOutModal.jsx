@@ -1,20 +1,28 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  QrCode, 
-  ShieldCheck, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
+import {
+  X,
+  QrCode,
+  ShieldCheck,
+  ArrowUpRight,
+  ArrowDownLeft,
   Camera
 } from 'lucide-react';
+import { checkOutAsset, checkInAsset } from '../api/endpoints';
 
-export default function CheckInOutModal({ isOpen, onClose, assets = [], onUpdateAsset }) {
+export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = [], onUpdateAsset, onCommitted }) {
   if (!isOpen) return null;
 
   const [mode, setMode] = useState('CHECK_OUT');
-  const [selectedAssetId, setSelectedAssetId] = useState(assets[0]?.id || 'EQX1001');
-  const [operatorId, setOperatorId] = useState('OP101');
-  const [targetSiteId, setTargetSiteId] = useState('S003');
+  const [selectedAssetId, setSelectedAssetId] = useState(assets[0]?.id || '');
+  const [operatorId, setOperatorId] = useState('OP-1001');
+  const [targetSiteId, setTargetSiteId] = useState(sites[0]?.site_id || 'S001');
+  const [returnDate, setReturnDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState(null);
   const [qrScanned, setQrScanned] = useState(false);
   
   const [checklist, setChecklist] = useState({
@@ -35,26 +43,48 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], onUpdate
     setQrScanned(true);
   };
 
-  const handleSubmitTransaction = (e) => {
+  const handleSubmitTransaction = async (e) => {
     e.preventDefault();
+    setApiError(null);
     if (mode === 'CHECK_OUT' && !allChecklistPassed) {
-      alert('Safety Violation: All pre-operation inspection checks must be completed.');
+      setApiError('Safety Violation: complete all pre-operation inspection checks.');
+      return;
+    }
+    if (!selectedAssetId) {
+      setApiError('Select an asset.');
       return;
     }
 
-    if (onUpdateAsset && selectedAsset) {
-      const updated = {
-        ...selectedAsset,
-        status: mode === 'CHECK_OUT' ? 'ACTIVE' : 'IDLE_WARNING',
-        siteId: mode === 'CHECK_OUT' ? targetSiteId : null,
-        siteName: mode === 'CHECK_OUT' ? `Site ${targetSiteId} Active Works` : 'Depot / In Transit',
-        operatorId: mode === 'CHECK_OUT' ? operatorId : null,
-        isAnomaly: false,
-        anomaly: null
-      };
-      onUpdateAsset(updated);
+    setSubmitting(true);
+    try {
+      if (mode === 'CHECK_OUT') {
+        await checkOutAsset({
+          asset_id: selectedAssetId,
+          site_id: targetSiteId,
+          operator_id: operatorId,
+          check_in_date: new Date(`${returnDate}T12:00:00Z`).toISOString(),
+        });
+      } else {
+        await checkInAsset({ asset_id: selectedAssetId });
+      }
+
+      if (onUpdateAsset && selectedAsset) {
+        onUpdateAsset({
+          ...selectedAsset,
+          status: mode === 'CHECK_OUT' ? 'ACTIVE' : 'IDLE_WARNING',
+          siteId: mode === 'CHECK_OUT' ? targetSiteId : null,
+          operatorId: mode === 'CHECK_OUT' ? operatorId : null,
+          isAnomaly: false,
+          anomaly: null,
+        });
+      }
+      onCommitted?.();
+      onClose();
+    } catch (err) {
+      setApiError(err.message || 'Transaction failed');
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -180,12 +210,29 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], onUpdate
                     onChange={(e) => setTargetSiteId(e.target.value)}
                     className="w-full bg-[#111111] border border-[#333333] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-[#FFCD11]"
                   >
-                    <option value="S001">S001 - Delhi Highway</option>
-                    <option value="S002">S002 - Mumbai Coastal</option>
-                    <option value="S003">S003 - Bangalore Quarry</option>
-                    <option value="S006">S006 - Ahmedabad Hub</option>
+                    {(sites.length ? sites : [{ site_id: 'S001', site_name: 'Site S001' }]).map((s) => (
+                      <option key={s.site_id} value={s.site_id}>
+                        {s.site_id} — {s.site_name || 'Site'}
+                      </option>
+                    ))}
                   </select>
                 </div>
+                <div className="col-span-2">
+                  <label className="block text-neutral-400 font-semibold mb-1.5">Expected Return Date</label>
+                  <input
+                    type="date"
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    className="w-full bg-[#111111] border border-[#333333] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-[#FFCD11]"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {apiError && (
+              <div className="bg-rose-950/50 border border-rose-800/60 text-rose-200 text-[11px] rounded-lg px-3 py-2">
+                {apiError}
               </div>
             )}
 
@@ -243,13 +290,16 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], onUpdate
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={submitting || (mode === 'CHECK_OUT' && !allChecklistPassed)}
                 className={`w-full py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center cursor-pointer ${
-                  mode === 'CHECK_OUT' && !allChecklistPassed
+                  submitting || (mode === 'CHECK_OUT' && !allChecklistPassed)
                     ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700'
                     : 'bg-[#FFCD11] hover:bg-[#E5B80E] text-black'
                 }`}
               >
-                {mode === 'CHECK_OUT' ? 'Confirm Dispatch & Authorize Ignition' : 'Process Return & Check-In'}
+                {submitting
+                  ? 'Submitting…'
+                  : mode === 'CHECK_OUT' ? 'Confirm Dispatch & Authorize Ignition' : 'Process Return & Check-In'}
               </button>
             </div>
           </form>

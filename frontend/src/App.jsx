@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useTelemetryStream } from './hooks/useTelemetryStream';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFleet } from './hooks/useFleet';
+import { useLiveSocket } from './hooks/useLiveSocket';
 import LiveFlightMap from './components/LiveFlightMap';
 import FleetDashboard from './components/FleetDashboard';
 import AnalyticsAndForecast from './components/AnalyticsAndForecast';
@@ -21,8 +22,10 @@ import {
 
 export default function App() {
   const [isLiveStreaming, setIsLiveStreaming] = useState(true);
-  const { assets, setAssets } = useTelemetryStream(isLiveStreaming);
-  
+  const { assets, setAssets, sites, status: fleetStatus, error: fleetError, refetch } = useFleet({
+    polling: isLiveStreaming,
+  });
+
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [activeTab, setActiveTab] = useState('fleet'); // 'fleet' | 'map' | 'analytics' | 'safety'
   const [selectedSiteFilter, setSelectedSiteFilter] = useState('ALL');
@@ -37,17 +40,30 @@ export default function App() {
   //  }
   //}, [assets, selectedAsset]);
 
-  // Automatic Anomaly Watcher
+  // Automatic Lockout Watcher — only fires for assets the backend has actually
+  // put into SAFETY_LOCKOUT (the state the override endpoint can clear).
   useEffect(() => {
-    const criticalAsset = assets.find(
-      a => a.status === 'CRITICAL_ALERT' || a.tiltAngle > 30 || (a.isAnomaly && a.speedKmH > 20)
-    );
+    const lockedAsset = assets.find((a) => a.rawStatus === 'SAFETY_LOCKOUT');
 
-    if (criticalAsset && !showEmergencyAlert && !sessionStorage.getItem('dismissed_' + criticalAsset.id)) {
-      setViolatedAsset(criticalAsset);
+    if (lockedAsset && !showEmergencyAlert && !sessionStorage.getItem('dismissed_' + lockedAsset.id)) {
+      setViolatedAsset(lockedAsset);
       setShowEmergencyAlert(true);
     }
   }, [assets, showEmergencyAlert]);
+
+  const handleLockout = useCallback((msg) => {
+    setViolatedAsset((prev) => {
+      const found = assets.find((a) => a.id === msg.asset_id);
+      return found || prev || { id: msg.asset_id, name: msg.asset_id, anomaly: msg.reason };
+    });
+    setShowEmergencyAlert(true);
+  }, [assets]);
+
+  const { connected: wsConnected } = useLiveSocket({
+    enabled: isLiveStreaming,
+    setAssets,
+    onLockout: handleLockout,
+  });
 
   const filteredAssetsBySite = assets.filter(a => {
     if (selectedSiteFilter === 'ALL') return true;
@@ -98,7 +114,7 @@ export default function App() {
           {/* Live Telemetry Stream Indicator */}
           <div className="bg-[#181818] border border-[#262626] rounded-xl p-2.5 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-2">
-              <Radio className={`w-3.5 h-3.5 ${isLiveStreaming ? 'text-emerald-400 animate-pulse' : 'text-neutral-500'}`} />
+              <Radio className={`w-3.5 h-3.5 ${isLiveStreaming && wsConnected ? 'text-emerald-400 animate-pulse' : isLiveStreaming ? 'text-amber-400' : 'text-neutral-500'}`} />
               <span className="text-[11px] font-semibold text-neutral-300">Telemetry Stream</span>
             </div>
             <button
@@ -123,10 +139,11 @@ export default function App() {
               className="w-full bg-[#111] border border-[#333] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#FFCD11]"
             >
               <option value="ALL">All Active Sites (Fleet View)</option>
-              <option value="S001">Site S001 — Delhi Highway</option>
-              <option value="S002">Site S002 — Mumbai Coastal</option>
-              <option value="S003">Site S003 — Bangalore Quarry</option>
-              <option value="S006">Site S006 — Ahmedabad Hub</option>
+              {sites.map((s) => (
+                <option key={s.site_id} value={s.site_id}>
+                  {s.site_id} — {s.site_name || 'Site'}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -251,6 +268,16 @@ export default function App() {
           </div>
         </header>
 
+        {fleetStatus === 'error' && (
+          <div className="mx-6 mt-4 bg-rose-950/50 border border-rose-800/60 text-rose-200 text-xs rounded-xl px-4 py-2.5 flex items-center justify-between">
+            <span>Cannot reach backend at {import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'} — {fleetError?.message}</span>
+            <button onClick={refetch} className="ml-3 bg-rose-800/60 hover:bg-rose-700 px-3 py-1 rounded-lg font-bold cursor-pointer">Retry</button>
+          </div>
+        )}
+        {fleetStatus === 'loading' && (
+          <div className="mx-6 mt-4 text-neutral-400 text-xs">Loading fleet…</div>
+        )}
+
         {/* Active Tab Workspace */}
         <main className="p-6 flex-1 flex flex-col">
           {activeTab === 'fleet' && (
@@ -325,13 +352,16 @@ export default function App() {
         isOpen={isCheckInOutOpen}
         onClose={() => setIsCheckInOutOpen(false)}
         assets={assets}
+        sites={sites}
         onUpdateAsset={handleUpdateAsset}
+        onCommitted={refetch}
       />
 
       <SafetyLockoutModal
         isOpen={showEmergencyAlert}
         onClose={handleCloseSafetyModal}
         violatedAsset={violatedAsset}
+        onCleared={refetch}
       />
     </div>
   );

@@ -19,6 +19,36 @@ python -m pytest tests/ -v
 python example_usage.py
 ```
 
+## Full-stack demo (backend API + React frontend)
+
+**1. Backend** (`backend/`, needs `backend/.env` with `SUPABASE_URL`, `SUPABASE_KEY`, optional `GROQ_API_KEY`):
+
+```bash
+cd backend
+pip install -r requirements.txt
+python seed_demo_data.py       # assets, sites, telemetry, alerts
+python seed_supervisors.py     # demo supervisor PINs (SUP-001 / 1234)
+python -m uvicorn main:app --reload --port 8000
+```
+
+**2. Frontend** (`frontend/`):
+
+```bash
+cd frontend
+cp .env.example .env           # points at http://localhost:8000
+npm install
+npm run dev                    # http://localhost:5173
+```
+
+The frontend is fully live — it reads `/assets/live`, `/sites`, `/forecast`,
+`/usage-summary`, streams `/ws/live`, and drives check-in/out and the safety
+override against the real API. Trigger a lockout for the demo with:
+
+```bash
+curl -X POST localhost:8000/demo/replay -H 'content-type: application/json' \
+  -d '{"scenario":"safety_breach","asset_id":"CRN-202"}'
+```
+
 ## Components
 
 | Class | File | Purpose |

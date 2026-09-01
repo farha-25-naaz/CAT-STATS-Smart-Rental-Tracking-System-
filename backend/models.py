@@ -19,10 +19,57 @@ class LiveAsset(BaseModel):
     type: Optional[str] = None
     status: Optional[str] = None
     current_site_id: Optional[str] = None
+    site_name: Optional[str] = None
     current_operator_id: Optional[str] = None
+    check_out_date: Optional[datetime] = None
     check_in_date: Optional[datetime] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    # latest telemetry snapshot
+    recorded_at: Optional[datetime] = None
+    speed_kmh: Optional[float] = None
+    tilt_angle_deg: Optional[float] = None
+    engine_hours: Optional[float] = None
+    idle_hours: Optional[float] = None
+    fuel_level_pct: Optional[float] = None
+    is_anomaly: Optional[bool] = None
+    # latest unresolved alert (if any)
+    latest_anomaly_type: Optional[str] = None
+    latest_anomaly_reason: Optional[str] = None
+    latest_anomaly_severity: Optional[str] = None
+    # maintenance risk (if scored)
+    risk_tier: Optional[str] = None
+    risk_score: Optional[float] = None
+    # commercial
+    rental_rate_per_day: Optional[float] = None
+    idle_cost_per_hour: Optional[float] = None
+
+
+class Site(BaseModel):
+    site_id: str
+    site_name: Optional[str] = None
+    center_lat: Optional[float] = None
+    center_lng: Optional[float] = None
+    geofence_radius_meters: Optional[float] = None
+
+
+class ForecastPoint(BaseModel):
+    date: str
+    units_needed: int
+
+
+class AssetForecast(BaseModel):
+    site_id: str
+    equipment_type: str
+    forecast_horizon_days: int
+    confidence: float
+    predicted_demand: List[ForecastPoint]
+
+
+class ForecastResponse(BaseModel):
+    forecast_generated_at: str
+    horizon_days: int
+    forecasts: List[AssetForecast]
 
 
 class CheckOutRequest(BaseModel):

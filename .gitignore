@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .venv/
 .venv_ml/
+
+# Trained ML model artifacts (rebuilt by backend/ml_orchestration.py)
+ml_engine/models/
 *.egg-info/
 
 # Environment variables

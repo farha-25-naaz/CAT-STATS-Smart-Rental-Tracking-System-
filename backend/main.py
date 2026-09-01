@@ -14,6 +14,7 @@ from models import (
     DayUsage,
     LiveAsset,
 )
+from demo_routes import router as demo_router
 from ingest_routes import router as ingest_router
 from ml_orchestration import load_or_train_models, refresh_site_centroids
 from ml_routes import router as ml_router
@@ -55,6 +56,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(safety_router)
 app.include_router(ml_router)
+app.include_router(demo_router)
 
 
 def _now_iso() -> str:

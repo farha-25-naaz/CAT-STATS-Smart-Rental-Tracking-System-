@@ -117,3 +117,11 @@ class SafetyOverrideRequest(BaseModel):
     supervisor_id: str
     resolution_note: Optional[str] = None
     resume_status: str = "ACTIVE"
+
+
+# --- Phase 6: demo safety net ---
+
+
+class DemoReplayRequest(BaseModel):
+    scenario: str = "safety_breach"
+    asset_id: str

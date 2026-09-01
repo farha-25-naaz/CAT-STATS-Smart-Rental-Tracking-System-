@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.venv_ml
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+backend/.env
+frontend/.env
+frontend/node_modules
+frontend/dist
+ml_engine/models
+repomix-output.xml
+sample_data
+tests
+*.md

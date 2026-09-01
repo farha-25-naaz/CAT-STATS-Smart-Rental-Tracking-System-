@@ -3,7 +3,7 @@ name: Deploy frontend to Azure Static Web Apps
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, backend]
     paths:
       - "frontend/**"
       - ".github/workflows/azure-frontend.yml"

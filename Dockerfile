@@ -13,6 +13,16 @@ RUN python -m pip install --upgrade pip \
 COPY backend /app/backend
 COPY ml_engine /app/ml_engine
 
+# Pre-train the deterministic demo models while the image is built. GitHub's
+# build runner has more startup time and memory than the small Container Apps
+# replica. Placeholder Supabase settings are sufficient here: model training
+# falls back to the simulator's built-in site coordinates when the remote
+# lookup is unavailable. Production credentials are supplied only at runtime.
+RUN cd /app/backend \
+    && SUPABASE_URL=https://placeholder.supabase.co \
+       SUPABASE_KEY=placeholder-build-key \
+       python ml_orchestration.py
+
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/ml_engine/models \
     && chown -R appuser:appuser /app

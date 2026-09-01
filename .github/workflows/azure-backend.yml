@@ -34,5 +34,5 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            catstatscr.azurecr.io/cat-stats-backend:v1
+            catstatscr.azurecr.io/cat-stats-backend:v2
             catstatscr.azurecr.io/cat-stats-backend:${{ github.sha }}

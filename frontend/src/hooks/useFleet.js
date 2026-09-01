@@ -12,8 +12,11 @@ export function useFleet({ polling = true, intervalMs = 8000 } = {}) {
   const [error, setError] = useState(null);
   const sitesRef = useRef([]);
   const mountedRef = useRef(true);
+  const loadingRef = useRef(false);
 
   const load = useCallback(async (signal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       if (!sitesRef.current.length) {
         sitesRef.current = await getSites({ signal }).catch(() => []);
@@ -26,8 +29,10 @@ export function useFleet({ polling = true, intervalMs = 8000 } = {}) {
       setError(null);
     } catch (err) {
       if (err.name === 'AbortError' || !mountedRef.current) return;
-      setStatus((s) => (s === 'ready' ? 'ready' : 'error'));
+      setStatus('error');
       setError(err);
+    } finally {
+      loadingRef.current = false;
     }
   }, []);
 

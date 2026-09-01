@@ -4,14 +4,9 @@ import {
   CheckCircle2, 
   Clock, 
   Search, 
-  Filter, 
   QrCode, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  ShieldAlert, 
   Activity, 
-  DollarSign, 
-  Calendar 
+  DollarSign
 } from 'lucide-react';
 
 export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut }) {
@@ -41,7 +36,7 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
   return (
     <div className="space-y-6">
       {/* Top Operations KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-[#181818] p-4 rounded-xl border border-[#2B2B2B]">
           <div className="flex items-center justify-between text-neutral-400 text-xs mb-1">
             <span>Total Rented Fleet</span>
@@ -81,7 +76,7 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
 
       {/* Control Bar: Search, Filters & Action Buttons */}
       <div className="bg-[#181818] p-4 rounded-xl border border-[#2B2B2B] flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 min-w-0 sm:min-w-[260px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -120,7 +115,7 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
         {/* Check-In / Check-Out Action Button */}
         <button
           onClick={onOpenCheckInOut}
-          className="bg-[#FFCD11] hover:bg-[#E5B80E] text-black font-extrabold px-4 py-2 rounded-lg text-xs transition flex items-center shadow-md cursor-pointer"
+          className="w-full sm:w-auto bg-[#FFCD11] hover:bg-[#E5B80E] text-black font-extrabold px-4 py-2 rounded-lg text-xs transition flex items-center justify-center shadow-md cursor-pointer"
         >
           <QrCode className="w-4 h-4 mr-1.5" />
           QR Check-In / Check-Out
@@ -129,7 +124,7 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
 
       {/* Rented Equipment Master Table */}
       <div className="bg-[#181818] rounded-xl border border-[#2B2B2B] overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[#2B2B2B] flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-[#2B2B2B] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-white flex items-center">
             Rented Machinery Tracking Register
             <span className="ml-2 bg-[#2B2B2B] text-neutral-300 text-[10px] px-2 py-0.5 rounded-full font-semibold">
@@ -160,8 +155,17 @@ export default function FleetDashboard({ assets, onSelectAsset, onOpenCheckInOut
                 return (
                   <tr 
                     key={asset.id} 
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${asset.id} on map`}
                     className="hover:bg-[#202020] transition cursor-pointer"
                     onClick={() => onSelectAsset(asset)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onSelectAsset(asset);
+                      }
+                    }}
                   >
                     <td className="py-3.5 px-4 font-mono font-bold text-[#FFCD11]">
                       {asset.id}

@@ -1,40 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   ShieldAlert,
-  AlertTriangle,
   Lock,
   KeyRound,
   Radio,
   CheckCircle2,
-  PhoneCall,
   FileWarning,
   X
 } from 'lucide-react';
 
 import { safetyOverride } from '../api/endpoints';
-
-const DEMO_SUPERVISOR_ID = 'SUP-001'; // TODO: replace with real company login
+import { useModalDialog } from '../hooks/useModalDialog';
 
 export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onCleared }) {
-  if (!isOpen) return null;
-
   const [overridePin, setOverridePin] = useState('');
-  const [supervisorId, setSupervisorId] = useState(DEMO_SUPERVISOR_ID);
+  const [supervisorId, setSupervisorId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
   const [isResolved, setIsResolved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const titleId = useId();
+  const noteId = useId();
+  const supervisorIdField = useId();
+  const pinId = useId();
+  const closeTimerRef = useRef(null);
+  const dialogRef = useModalDialog({ isOpen, onClose });
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose?.();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
 
   const handleResolveAlert = async (e) => {
     e.preventDefault();
@@ -55,7 +47,7 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
       });
       setIsResolved(true);
       onCleared?.(assetId);
-      setTimeout(() => {
+      closeTimerRef.current = window.setTimeout(() => {
         setIsResolved(false);
         setOverridePin('');
         setResolutionNote('');
@@ -74,23 +66,20 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
     }
   };
 
-  const asset = violatedAsset || {
-    id: "EQX1002",
-    name: "Cat 777 Heavy Crane",
-    tiltAngle: 34.8,
-    speedKmH: 26.4
-  };
+  const asset = violatedAsset || { id: 'Unknown asset', name: 'Telemetry unavailable' };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
-      <div className="relative bg-[#161010] border-2 border-red-600 w-full max-w-xl rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.4)] overflow-hidden flex flex-col z-10 text-white font-sans">
+    <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center overflow-y-auto bg-black/90 backdrop-blur-xl p-2 sm:p-4">
+      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative bg-[#161010] border-2 border-red-600 w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.4)] overflow-hidden flex flex-col z-10 text-white font-sans">
         
         {/* Emergency Banner */}
-        <div className="bg-red-600 px-6 py-4 flex items-center justify-between text-white">
+        <div className="bg-red-600 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 text-white shrink-0">
           <div className="flex items-center space-x-3">
             <ShieldAlert className="w-7 h-7 animate-bounce" />
             <div>
-              <h2 className="text-sm font-black tracking-widest uppercase">
+              <h2 id={titleId} className="text-xs sm:text-sm font-black tracking-wider sm:tracking-widest uppercase">
                 Critical Safety Violation Lockout
               </h2>
               <p className="text-[11px] font-semibold text-red-100">
@@ -114,7 +103,7 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
           </div>
         </div>
 
-        <div className="p-5 space-y-4 text-xs">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-4 text-xs">
           {/* Diagnostic Stats */}
           <div className="bg-[#241414] border border-red-900/60 rounded-xl p-3.5 space-y-2.5">
             <div className="flex items-center justify-between border-b border-red-900/40 pb-2">
@@ -122,18 +111,18 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
               <span className="text-red-400 font-mono text-[10px]">#ALERT-TILT-902</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
               <div className="bg-[#180D0D] p-2 rounded-lg border border-red-900/40">
                 <span className="text-[10px] text-neutral-400 block">Tilt / Roll</span>
-                <span className="text-sm font-black text-red-400">{asset.tiltAngle || 34.8}° (Hazard)</span>
+                <span className="text-sm font-black text-red-400">{asset.tiltAngle ?? '—'}°</span>
               </div>
               <div className="bg-[#180D0D] p-2 rounded-lg border border-red-900/40">
                 <span className="text-[10px] text-neutral-400 block">Velocity</span>
-                <span className="text-sm font-black text-amber-400">{asset.speedKmH || 24.5} km/h</span>
+                <span className="text-sm font-black text-amber-400">{asset.speedKmH ?? '—'} km/h</span>
               </div>
               <div className="bg-[#180D0D] p-2 rounded-lg border border-red-900/40">
                 <span className="text-[10px] text-neutral-400 block">Geofence</span>
-                <span className="text-sm font-black text-rose-500">BREACHED</span>
+                <span className="text-sm font-black text-rose-500">{asset.anomaly || 'LOCKOUT'}</span>
               </div>
             </div>
           </div>
@@ -148,11 +137,13 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
           ) : (
             <form onSubmit={handleResolveAlert} className="space-y-3">
               <div>
-                <label className="block text-neutral-300 font-bold mb-1">
+                <label htmlFor={noteId} className="block text-neutral-300 font-bold mb-1">
                   Supervisor Corrective Action Log
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  id={noteId}
+                  data-autofocus
+                  rows={3}
                   value={resolutionNote}
                   onChange={(e) => setResolutionNote(e.target.value)}
                   placeholder="e.g. Ground stabilized, machine inspected, site secure..."
@@ -162,8 +153,9 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-bold mb-1">Supervisor ID</label>
+                <label htmlFor={supervisorIdField} className="block text-neutral-300 font-bold mb-1">Supervisor ID</label>
                 <input
+                  id={supervisorIdField}
                   type="text"
                   value={supervisorId}
                   onChange={(e) => { setSupervisorId(e.target.value); setErrorMessage(''); }}
@@ -173,13 +165,13 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
               </div>
 
               <div>
-                <label className="block text-neutral-300 font-bold mb-1 flex items-center justify-between">
+                <label htmlFor={pinId} className="block text-neutral-300 font-bold mb-1 flex items-center justify-between">
                   <span>Enter Authorization PIN to Unlock</span>
-                  <span className="text-[10px] text-neutral-500 font-normal">demo: SUP-001 / 1234</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
+                    id={pinId}
                     type="password"
                     value={overridePin}
                     onChange={(e) => {

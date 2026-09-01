@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 // Camera QR reader. Calls onDecode(text) once on the first successful read.
@@ -10,8 +10,11 @@ export default function QrScanner({ onDecode, onError }) {
   const hostRef = useRef(null);
   const onDecodeRef = useRef(onDecode);
   const onErrorRef = useRef(onError);
-  onDecodeRef.current = onDecode;
-  onErrorRef.current = onError;
+
+  useEffect(() => {
+    onDecodeRef.current = onDecode;
+    onErrorRef.current = onError;
+  }, [onDecode, onError]);
 
   const [status, setStatus] = useState('starting'); // starting | live | failed
   const [failMsg, setFailMsg] = useState('');
@@ -80,10 +83,10 @@ export default function QrScanner({ onDecode, onError }) {
     };
   }, []);
 
-  const hostId = useRef(`qr-host-${Math.random().toString(36).slice(2)}`).current;
+  const hostId = `qr-host-${useId().replace(/:/g, '')}`;
 
   return (
-    <div className="relative w-full min-h-[300px] overflow-hidden rounded-xl border border-[#333] bg-black">
+    <div className="relative w-full min-h-[220px] sm:min-h-[300px] overflow-hidden rounded-xl border border-[#333] bg-black">
       <div id={hostId} ref={hostRef} className="w-full [&_video]:w-full [&_video]:block" />
       {status !== 'live' && (
         <div className="absolute inset-0 flex items-center justify-center text-center px-3 text-[11px] text-neutral-400">

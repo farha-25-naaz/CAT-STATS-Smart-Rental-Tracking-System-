@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
   X,
   QrCode,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { checkOutAsset, checkInAsset } from '../api/endpoints';
 import QrScanner from './QrScanner';
+import { useModalDialog } from '../hooks/useModalDialog';
 
 // A tag encodes either the bare id ("EXC-101") or {"asset_id":"EXC-101"}.
 function parseAssetCode(raw) {
@@ -25,8 +26,6 @@ function parseAssetCode(raw) {
 }
 
 export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = [], onUpdateAsset, onCommitted }) {
-  if (!isOpen) return null;
-
   const [mode, setMode] = useState('CHECK_OUT');
   const [selectedAssetId, setSelectedAssetId] = useState(assets[0]?.id || '');
   const [operatorId, setOperatorId] = useState('OP-1001');
@@ -49,6 +48,12 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
     ppeComplianceConfirmed: false,
     emergencyStopTested: false
   });
+  const titleId = useId();
+  const assetFieldId = useId();
+  const operatorFieldId = useId();
+  const siteFieldId = useId();
+  const returnFieldId = useId();
+  const dialogRef = useModalDialog({ isOpen, onClose });
 
   const selectedAsset = assets.find(a => a.id === selectedAssetId) || assets[0];
   const allChecklistPassed = Object.values(checklist).every(Boolean);
@@ -76,13 +81,14 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
       return;
     }
     const match = assets.find((a) => a.id === id);
+    if (!match) {
+      setQrScanned(false);
+      setScanNote(`Asset "${id}" is not in the current fleet. Check the tag and try again.`);
+      return;
+    }
     setSelectedAssetId(id);
     setQrScanned(true);
     setCameraOn(false);
-    if (!match) {
-      setScanNote(`Scanned "${id}" — not in the current fleet list, proceeding anyway.`);
-      return;
-    }
     // Auto-pick the transaction from the asset's current state.
     const nextMode = match.rawStatus === 'UNASSIGNED' ? 'CHECK_OUT' : 'CHECK_IN';
     setMode(nextMode);
@@ -121,7 +127,8 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
       if (onUpdateAsset && selectedAsset) {
         onUpdateAsset({
           ...selectedAsset,
-          status: mode === 'CHECK_OUT' ? 'ACTIVE' : 'IDLE_WARNING',
+          status: mode === 'CHECK_OUT' ? 'ACTIVE' : 'UNASSIGNED',
+          rawStatus: mode === 'CHECK_OUT' ? 'ACTIVE' : 'UNASSIGNED',
           siteId: mode === 'CHECK_OUT' ? targetSiteId : null,
           operatorId: mode === 'CHECK_OUT' ? operatorId : null,
           isAnomaly: false,
@@ -137,18 +144,20 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="bg-[#181818] border border-[#333333] w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col text-white font-sans">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/80 backdrop-blur-md p-2 sm:p-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="bg-[#181818] border border-[#333333] w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col text-white font-sans">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#2B2B2B] flex items-center justify-between bg-[#141414]">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-[#2B2B2B] flex items-center justify-between bg-[#141414] shrink-0">
           <div className="flex items-center space-x-3">
             <div className="bg-[#FFCD11] p-2 rounded-xl text-black">
               <QrCode className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-white">
+              <h3 id={titleId} className="text-sm font-extrabold text-white">
                 Equipment Dispatch & Return Portal
               </h3>
               <p className="text-xs text-neutral-400">
@@ -158,6 +167,7 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
           </div>
           <button 
             onClick={onClose}
+            aria-label="Close dispatch and return dialog"
             className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -165,7 +175,7 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4 sm:space-y-5">
           <div className="grid grid-cols-2 gap-2 bg-[#111111] p-1 rounded-xl border border-[#2B2B2B]">
             <button
               type="button"
@@ -208,10 +218,12 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
 
           <form onSubmit={handleSubmitTransaction} className="space-y-4 text-xs">
             <div>
-              <label className="block text-neutral-400 font-semibold mb-1.5">
+              <label htmlFor={assetFieldId} className="block text-neutral-400 font-semibold mb-1.5">
                 Select Machinery ID
               </label>
               <select
+                id={assetFieldId}
+                data-autofocus
                 value={selectedAssetId}
                 onChange={(e) => {
                   setSelectedAssetId(e.target.value);
@@ -229,7 +241,7 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
 
             {/* QR machine-tag verification: camera scan, or type/paste the code */}
             <div className="bg-[#111111] border border-[#2B2B2B] rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">
                   <div className={`p-2.5 rounded-lg ${qrScanned ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-600/40' : 'bg-neutral-800 text-neutral-400'}`}>
                     {qrScanned ? <CheckCircle2 className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
@@ -259,13 +271,13 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
                 />
               )}
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   placeholder="Enter asset code e.g. EXC-101"
-                  className="flex-1 bg-[#0D0D0D] border border-[#333] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-[#FFCD11]"
+                  className="min-w-0 flex-1 bg-[#0D0D0D] border border-[#333] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-[#FFCD11]"
                 />
                 <button
                   type="button"
@@ -280,10 +292,11 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
             </div>
 
             {mode === 'CHECK_OUT' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-neutral-400 font-semibold mb-1.5">Operator ID</label>
+                  <label htmlFor={operatorFieldId} className="block text-neutral-400 font-semibold mb-1.5">Operator ID</label>
                   <input
+                    id={operatorFieldId}
                     type="text"
                     value={operatorId}
                     onChange={(e) => setOperatorId(e.target.value)}
@@ -293,8 +306,9 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
                   />
                 </div>
                 <div>
-                  <label className="block text-neutral-400 font-semibold mb-1.5">Destination Site</label>
+                  <label htmlFor={siteFieldId} className="block text-neutral-400 font-semibold mb-1.5">Destination Site</label>
                   <select
+                    id={siteFieldId}
                     value={targetSiteId}
                     onChange={(e) => setTargetSiteId(e.target.value)}
                     className="w-full bg-[#111111] border border-[#333333] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-[#FFCD11]"
@@ -306,9 +320,10 @@ export default function CheckInOutModal({ isOpen, onClose, assets = [], sites = 
                     ))}
                   </select>
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-neutral-400 font-semibold mb-1.5">Expected Return Date</label>
+                <div className="sm:col-span-2">
+                  <label htmlFor={returnFieldId} className="block text-neutral-400 font-semibold mb-1.5">Expected Return Date</label>
                   <input
+                    id={returnFieldId}
                     type="date"
                     value={returnDate}
                     onChange={(e) => setReturnDate(e.target.value)}

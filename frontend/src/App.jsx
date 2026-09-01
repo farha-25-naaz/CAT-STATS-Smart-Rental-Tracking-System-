@@ -1,13 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFleet } from './hooks/useFleet';
 import { useLiveSocket } from './hooks/useLiveSocket';
-import LiveFlightMap from './components/LiveFlightMap';
 import FleetDashboard from './components/FleetDashboard';
-import AnalyticsAndForecast from './components/AnalyticsAndForecast';
-import CheckInOutModal from './components/CheckInOutModal';
 import SafetyLockoutModal from './components/SafetyLockoutModal';
 import CatLogo from './components/CatLogo';
-import AssetQrSheet from './components/AssetQrSheet';
 import { 
   ShieldAlert, 
   Layers, 
@@ -17,9 +13,13 @@ import {
   AlertTriangle,
   BarChart3,
   Radio,
-  Clock,
   HardHat
 } from 'lucide-react';
+
+const LiveFlightMap = React.lazy(() => import('./components/LiveFlightMap'));
+const AnalyticsAndForecast = React.lazy(() => import('./components/AnalyticsAndForecast'));
+const CheckInOutModal = React.lazy(() => import('./components/CheckInOutModal'));
+const AssetQrSheet = React.lazy(() => import('./components/AssetQrSheet'));
 
 export default function App() {
   const [isLiveStreaming, setIsLiveStreaming] = useState(true);
@@ -33,6 +33,11 @@ export default function App() {
   const [showEmergencyAlert, setShowEmergencyAlert] = useState(false);
   const [violatedAsset, setViolatedAsset] = useState(null);
   const [isCheckInOutOpen, setIsCheckInOutOpen] = useState(false);
+  const assetsRef = useRef(assets);
+
+  useEffect(() => {
+    assetsRef.current = assets;
+  }, [assets]);
 
   // Set default selected asset on initial load
   //useEffect(() => {
@@ -47,6 +52,9 @@ export default function App() {
     const lockedAsset = assets.find((a) => a.rawStatus === 'SAFETY_LOCKOUT');
 
     if (lockedAsset && !showEmergencyAlert && !sessionStorage.getItem('dismissed_' + lockedAsset.id)) {
+      // The alert mirrors an external telemetry transition, so synchronizing local
+      // dialog state here is intentional rather than derived render state.
+      // eslint-disable-next-line react/set-state-in-effect
       setViolatedAsset(lockedAsset);
       setShowEmergencyAlert(true);
     }
@@ -54,11 +62,11 @@ export default function App() {
 
   const handleLockout = useCallback((msg) => {
     setViolatedAsset((prev) => {
-      const found = assets.find((a) => a.id === msg.asset_id);
+      const found = assetsRef.current.find((a) => a.id === msg.asset_id);
       return found || prev || { id: msg.asset_id, name: msg.asset_id, anomaly: msg.reason };
     });
     setShowEmergencyAlert(true);
-  }, [assets]);
+  }, []);
 
   const { connected: wsConnected } = useLiveSocket({
     enabled: isLiveStreaming,
@@ -95,11 +103,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-[#0C0C0C] text-gray-200 font-sans overflow-hidden select-none">
+    <div className="flex min-h-dvh lg:h-dvh flex-col lg:flex-row bg-[#0C0C0C] text-gray-200 font-sans overflow-x-hidden lg:overflow-hidden">
       
       {/* 1. Left Navigation Sidebar */}
-      <aside className="w-64 bg-[#121212] border-r border-[#222] flex flex-col justify-between p-4 shrink-0">
-        <div className="space-y-5">
+      <aside className="w-full lg:w-64 bg-[#121212] border-b lg:border-b-0 lg:border-r border-[#222] flex flex-col justify-between p-3 lg:p-4 shrink-0">
+        <div className="space-y-3 lg:space-y-5">
           
           {/* Rebranded CATstats Header */}
           <div className="flex items-center space-x-3 px-1.5 py-1">
@@ -149,7 +157,7 @@ export default function App() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="grid grid-cols-2 sm:grid-cols-5 lg:block gap-1 lg:space-y-1" aria-label="Primary navigation">
             <button
               onClick={() => setActiveTab('fleet')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
@@ -247,10 +255,10 @@ export default function App() {
       </aside>
 
       {/* 2. Main Workstation Area */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
+      <div className="min-w-0 flex-1 flex flex-col lg:overflow-y-auto">
         
         {/* Streamlined Clean Header */}
-        <header className="bg-[#121212] border-b border-[#222] px-6 py-3 flex items-center justify-between sticky top-0 z-30">
+        <header className="bg-[#121212] border-b border-[#222] px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-30">
           <div className="flex items-center space-x-4">
             <div className="p-2 rounded-xl bg-[#1C1C1C] border border-[#282828] text-[#FFCD11]">
               <HardHat className="w-5 h-5" />
@@ -261,13 +269,13 @@ export default function App() {
                 <span className="text-[10px] bg-[#222] text-neutral-400 px-2 py-0.5 rounded font-mono">Contract #CAT-2026-98</span>
               </div>
               <p className="text-[11px] text-neutral-400">
-                Active Zone: <strong className="text-neutral-200">Bangalore Quarry & Metro Expansion (S003)</strong>
+                Active Zone: <strong className="text-neutral-200">{selectedSiteFilter === 'ALL' ? 'All active sites' : sites.find((site) => site.site_id === selectedSiteFilter)?.site_name || selectedSiteFilter}</strong>
               </p>
             </div>
           </div>
 
           {/* Key Fleet KPI Badges */}
-          <div className="flex items-center space-x-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-neutral-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               <span className="text-[11px]">Active: <strong className="text-white">{activeCount}</strong></span>
@@ -294,7 +302,8 @@ export default function App() {
         )}
 
         {/* Active Tab Workspace */}
-        <main className="p-6 flex-1 flex flex-col">
+        <main className="p-3 sm:p-6 flex-1 flex flex-col">
+          <React.Suspense fallback={<div className="p-6 text-xs text-neutral-400">Loading workspace…</div>}>
           {activeTab === 'fleet' && (
             <FleetDashboard 
               assets={filteredAssetsBySite} 
@@ -332,8 +341,8 @@ export default function App() {
                 </p>
 
                 <div className="space-y-3">
-                  {assets.filter(a => a.isAnomaly || a.status !== 'ACTIVE').map(asset => (
-                    <div key={asset.id} className="bg-[#181818] border border-[#282828] rounded-xl p-4 flex items-center justify-between">
+                  {assets.filter(a => a.isAnomaly || a.status === 'CRITICAL_ALERT').map(asset => (
+                    <div key={asset.id} className="bg-[#181818] border border-[#282828] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center space-x-3">
                         <div className={`p-2.5 rounded-lg ${asset.status === 'CRITICAL_ALERT' ? 'bg-rose-950/60 text-rose-400 border border-rose-800/40' : 'bg-amber-950/60 text-amber-400 border border-amber-800/40'}`}>
                           <AlertTriangle className="w-5 h-5" />
@@ -359,29 +368,37 @@ export default function App() {
                       </button>
                     </div>
                   ))}
+                  {!assets.some(a => a.isAnomaly || a.status === 'CRITICAL_ALERT') && (
+                    <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-5 text-xs text-emerald-300">
+                      No active safety anomalies. Live monitoring is running normally.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
+          </React.Suspense>
         </main>
       </div>
 
       {/* Modals */}
-      <CheckInOutModal
+      <React.Suspense fallback={null}>
+      {isCheckInOutOpen && <CheckInOutModal
         isOpen={isCheckInOutOpen}
         onClose={() => setIsCheckInOutOpen(false)}
         assets={assets}
         sites={sites}
         onUpdateAsset={handleUpdateAsset}
         onCommitted={refetch}
-      />
+      />}
+      </React.Suspense>
 
-      <SafetyLockoutModal
+      {showEmergencyAlert && <SafetyLockoutModal
         isOpen={showEmergencyAlert}
         onClose={handleCloseSafetyModal}
         violatedAsset={violatedAsset}
         onCleared={refetch}
-      />
+      />}
     </div>
   );
 }

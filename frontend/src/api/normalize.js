@@ -19,8 +19,10 @@ export function toUiStatus(raw, { isAnomaly } = {}) {
   if (raw === 'SAFETY_LOCKOUT') return 'CRITICAL_ALERT';
   if (isAnomaly) return 'CRITICAL_ALERT';
   if (raw === 'ACTIVE') return 'ACTIVE';
-  // IDLE, OVERDUE, UNASSIGNED and anything else fall here
-  return 'IDLE_WARNING';
+  if (raw === 'UNASSIGNED') return 'UNASSIGNED';
+  if (raw === 'OVERDUE') return 'OVERDUE';
+  if (raw === 'IDLE') return 'IDLE_WARNING';
+  return raw || 'UNKNOWN';
 }
 
 export function normalizeAsset(a, sitesById = {}) {

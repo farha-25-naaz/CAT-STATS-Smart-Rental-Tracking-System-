@@ -86,7 +86,7 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
-export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedAsset, activeSiteId }) {
+export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedAsset }) {
   const [mapCenter, setMapCenter] = useState(BANGALORE_CENTER);
   const [liveAssets, setLiveAssets] = useState([]);
   const [highlightCoords, setHighlightCoords] = useState(null);
@@ -166,10 +166,10 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
   };
 
   return (
-    <div className="flex-1 w-full h-[calc(100vh-120px)] min-h-[550px] relative rounded-2xl overflow-hidden border border-[#222] shadow-2xl">
+    <div className="flex-1 w-full h-[70dvh] lg:h-[calc(100vh-120px)] min-h-[420px] lg:min-h-[550px] relative rounded-2xl overflow-hidden border border-[#222] shadow-2xl">
       
       {/* Top HUD Tracker Pill */}
-      <div className="absolute top-4 left-4 z-[1000] bg-[#121212]/90 backdrop-blur-md border border-[#2B2B2B] px-4 py-2 rounded-xl flex items-center space-x-3 shadow-2xl pointer-events-auto">
+      <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-[1000] max-w-[calc(100%-1rem)] bg-[#121212]/90 backdrop-blur-md border border-[#2B2B2B] px-3 sm:px-4 py-2 rounded-xl flex flex-wrap items-center gap-2 sm:gap-3 shadow-2xl pointer-events-auto">
         <div className="flex items-center space-x-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-xs font-bold text-white tracking-wide">Live Site Radar</span>
@@ -246,7 +246,7 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
 
       {/* Slide-In Telemetry Drawer from Right Edge */}
       <div 
-        className={`absolute top-4 right-4 z-[1001] w-84 bg-[#141414]/95 backdrop-blur-xl border border-[#2B2B2B] rounded-2xl p-5 shadow-2xl transition-all duration-300 transform ${
+        className={`absolute inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-auto sm:top-4 sm:right-4 z-[1001] sm:w-84 max-h-[calc(100%-5rem)] overflow-y-auto bg-[#141414]/95 backdrop-blur-xl border border-[#2B2B2B] rounded-2xl p-3 sm:p-5 shadow-2xl transition-all duration-300 transform ${
           activeSelected ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
         }`}
       >
@@ -288,7 +288,7 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
                   <span>Work / Idle</span>
                 </div>
                 <div className="text-xs font-mono font-bold text-white">
-                  {activeSelected.productiveHours || 1149.3}h <span className="text-neutral-500 font-normal">/</span> <span className="text-amber-400">{activeSelected.idleHours || 191.4}h</span>
+                  {activeSelected.productiveHours ?? '—'}h <span className="text-neutral-500 font-normal">/</span> <span className="text-amber-400">{activeSelected.idleHours ?? '—'}h</span>
                 </div>
               </div>
 
@@ -298,7 +298,7 @@ export default function LiveFlightMap({ assets = [], selectedAsset, setSelectedA
                   <span>Fuel Level</span>
                 </div>
                 <div className="text-xs font-mono font-bold text-white">
-                  {activeSelected.fuelPct || 80.2}%
+                  {activeSelected.fuelPct ?? '—'}%
                 </div>
               </div>
 

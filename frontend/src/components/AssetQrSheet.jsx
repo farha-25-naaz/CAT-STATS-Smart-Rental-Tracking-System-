@@ -7,7 +7,7 @@ import { Printer, QrCode } from 'lucide-react';
 export default function AssetQrSheet({ assets = [] }) {
   return (
     <div className="space-y-4">
-      <div className="bg-[#141414] border border-[#242424] rounded-2xl p-5 flex items-center justify-between print:hidden">
+      <div className="bg-[#141414] border border-[#242424] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center">
             <QrCode className="w-4 h-4 mr-2 text-[#FFCD11]" />
@@ -27,13 +27,13 @@ export default function AssetQrSheet({ assets = [] }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 print:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 print:grid-cols-3">
         {assets.map((a) => (
           <div
             key={a.id}
             className="bg-white rounded-xl p-4 flex flex-col items-center text-center border border-neutral-300"
           >
-            <QRCodeSVG value={a.id} size={200} level="L" marginSize={4} />
+            <QRCodeSVG value={a.id} size={200} className="w-full max-w-[200px] h-auto" level="L" marginSize={4} />
             <div className="mt-3 font-mono font-black text-black text-sm">{a.id}</div>
             <div className="text-[11px] text-neutral-600">{a.name}</div>
             <div className="text-[10px] text-neutral-400">{a.type}</div>

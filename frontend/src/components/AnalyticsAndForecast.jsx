@@ -16,10 +16,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import { 
   TrendingUp, 
   Sparkles, 
-  Activity, 
   Clock, 
-  DollarSign, 
-  CheckCircle2, 
   AlertTriangle,
   Bot
 } from 'lucide-react';
@@ -48,6 +45,10 @@ export default function AnalyticsAndForecast({ assets }) {
     () => assets.find((a) => a.siteId)?.siteId || 'S001',
     [assets],
   );
+  const briefingTargetId = useMemo(
+    () => [...assets].sort((a, b) => (b.idleHours || 0) - (a.idleHours || 0))[0]?.id || null,
+    [assets],
+  );
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -72,14 +73,13 @@ export default function AnalyticsAndForecast({ assets }) {
 
   // Natural-language briefing for the highest-risk / most-idle asset.
   useEffect(() => {
-    const target = [...assets].sort((a, b) => (b.idleHours || 0) - (a.idleHours || 0))[0];
-    if (!target) return undefined;
+    if (!briefingTargetId) return undefined;
     const ctrl = new AbortController();
-    generateAssetSummary(target.id, { signal: ctrl.signal })
-      .then((res) => setAiBriefing({ assetId: target.id, ...res.summary }))
+    generateAssetSummary(briefingTargetId, { signal: ctrl.signal })
+      .then((res) => setAiBriefing({ assetId: briefingTargetId, ...res.summary }))
       .catch(() => setAiBriefing(null));
     return () => ctrl.abort();
-  }, [assets]);
+  }, [briefingTargetId]);
 
   // 1. Chart.js Data: Engine Runtime vs Idle Hours per Rented Asset
   const assetLabels = assets.map(a => a.id);
@@ -199,7 +199,7 @@ export default function AnalyticsAndForecast({ assets }) {
     <div className="space-y-6">
       {/* Wow Factor: Natural Language Fleet AI Briefing Card */}
       <div className="bg-gradient-to-r from-[#181818] to-[#201A10] border border-[#FFCD11]/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex items-center space-x-3">
             <div className="bg-[#FFCD11] p-2.5 rounded-xl text-black">
               <Bot className="w-5 h-5" />
@@ -256,7 +256,7 @@ export default function AnalyticsAndForecast({ assets }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Chart 1: Engine vs Idle Runtime */}
         <div className="bg-[#141414] border border-[#2B2B2B] rounded-2xl p-5 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4 border-b border-[#242424] pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-[#242424] pb-3">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center">
                 <Clock className="w-4 h-4 mr-2 text-emerald-400" />

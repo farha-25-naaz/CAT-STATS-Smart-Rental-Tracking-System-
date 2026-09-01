@@ -1,9 +1,9 @@
-name: Deploy backend to Azure Container Apps
+name: Build backend container
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, backend]
     paths:
       - "backend/**"
       - "ml_engine/**"
@@ -15,22 +15,24 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sign in to Azure
-        uses: azure/login@v2
+      - name: Sign in to Azure Container Registry
+        uses: docker/login-action@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          registry: catstatscr.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and deploy container
-        uses: azure/container-apps-deploy-action@v2
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: Dockerfile
-          acrName: ${{ vars.AZURE_ACR_NAME }}
-          containerAppName: ${{ vars.AZURE_CONTAINER_APP_NAME }}
-          resourceGroup: ${{ vars.AZURE_RESOURCE_GROUP }}
-          imageToBuild: ${{ vars.AZURE_ACR_NAME }}.azurecr.io/cat-stats-backend:${{ github.sha }}
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            catstatscr.azurecr.io/cat-stats-backend:v1
+            catstatscr.azurecr.io/cat-stats-backend:${{ github.sha }}

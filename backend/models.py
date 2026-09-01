@@ -106,3 +106,14 @@ class SummaryIngest(BaseModel):
     summary: str
     severity: Optional[SummarySeverity] = None
     generated_at: Optional[datetime] = None
+
+
+# --- Phase 4: safety lockout override / clearance ---
+
+
+class SafetyOverrideRequest(BaseModel):
+    asset_id: str
+    pin: str
+    supervisor_id: str
+    resolution_note: Optional[str] = None
+    resume_status: str = "ACTIVE"

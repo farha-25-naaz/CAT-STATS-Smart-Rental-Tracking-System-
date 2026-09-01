@@ -15,6 +15,7 @@ from models import (
     LiveAsset,
 )
 from ingest_routes import router as ingest_router
+from safety_routes import router as safety_router
 from scheduler import start_scheduler
 from websocket_manager import manager
 
@@ -40,6 +41,7 @@ app.add_middleware(
 )
 
 app.include_router(ingest_router)
+app.include_router(safety_router)
 
 
 def _now_iso() -> str:

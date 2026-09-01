@@ -35,13 +35,16 @@ export default function QrScanner({ onDecode, onError }) {
       });
       try {
         await scanner.start(
-          {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          // html5-qrcode restricts this selector object to exactly one key.
+          // Additional MediaTrack constraints belong in videoConstraints below.
+          { facingMode: 'environment' },
           {
             fps: 20,
+            videoConstraints: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
             // Scan box tracks the viewfinder size so it's easy to line up.
             qrbox: (vw, vh) => {
               const m = Math.max(200, Math.floor(Math.min(vw, vh) * 0.75));

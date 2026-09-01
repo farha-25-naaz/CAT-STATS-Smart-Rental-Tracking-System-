@@ -23,13 +23,13 @@ EXPECTED_KEYS = {
 EXPECTED_DEMAND_ITEM_KEYS = {"date", "units_needed"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def demand_data():
     sim = Simulator(seed=42)
     return sim.generate_demand_history(n_sites=3, n_months=4)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def fitted_forecaster(demand_data):
     forecaster = DemandForecaster(horizon_days=7, min_history_days=30)
     forecaster.fit(demand_data)
@@ -39,7 +39,7 @@ def fitted_forecaster(demand_data):
 class TestFit:
     def test_fit_returns_self(self, demand_data):
         f = DemandForecaster()
-        result = f.fit(demand_data)
+        result = f.fit(demand_data.head(40))
         assert result is f
 
     def test_models_created_for_all_groups(self, fitted_forecaster, demand_data):

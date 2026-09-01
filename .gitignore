@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Environment variables
+.env
+
+# Node
+node_modules/
+dist/
+build/
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db

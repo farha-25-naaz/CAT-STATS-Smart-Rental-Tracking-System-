@@ -52,12 +52,12 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={submit} className="space-y-4">
-            <div><label htmlFor="email" className="block text-xs font-bold text-neutral-300 mb-1.5">Work email</label><input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-[#333] bg-[#141414] px-4 py-3 text-sm outline-none focus:border-[#FFCD11]" placeholder="name@company.com" /></div>
-            <div><label htmlFor="password" className="block text-xs font-bold text-neutral-300 mb-1.5">Password</label><input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-[#333] bg-[#141414] px-4 py-3 text-sm outline-none focus:border-[#FFCD11]" placeholder="Enter your password" /></div>
+            <div><label htmlFor="email" className="block text-xs font-bold text-neutral-300 mb-1.5">Work email</label><input id="email" type="text" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-[#333] bg-[#141414] px-4 py-3 text-sm outline-none focus:border-[#FFCD11]" placeholder="Any value for demo access" /></div>
+            <div><label htmlFor="password" className="block text-xs font-bold text-neutral-300 mb-1.5">Password</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-[#333] bg-[#141414] px-4 py-3 text-sm outline-none focus:border-[#FFCD11]" placeholder="Any value for demo access" /></div>
             {error && <p role="alert" className="rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-xs text-rose-300">{error}</p>}
             <button disabled={submitting} className="w-full rounded-xl bg-[#FFCD11] py-3 text-sm font-black text-black hover:bg-[#e7ba0e] disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2"><LockKeyhole className="w-4 h-4" />{submitting ? 'Signing in…' : `Open ${portal === 'cat_admin' ? 'Admin' : 'Customer'} workspace`}</button>
           </form>
-          <p className="flex items-center justify-center gap-1.5 mt-6 text-[11px] text-neutral-500"><ShieldCheck className="w-3.5 h-3.5" />Protected by Supabase authentication and row-level security</p>
+          <p className="flex items-center justify-center gap-1.5 mt-6 text-[11px] text-amber-500"><ShieldCheck className="w-3.5 h-3.5" />Temporary demo access — authentication disabled</p>
         </div>
       </section>
     </main>

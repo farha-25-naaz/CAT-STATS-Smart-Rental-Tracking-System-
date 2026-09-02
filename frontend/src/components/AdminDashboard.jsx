@@ -3,6 +3,7 @@ import { LogOut, Pencil, RefreshCw, Save, Search, ShieldCheck, X } from 'lucide-
 import CatLogo from './CatLogo';
 import { useAuth } from '../auth/useAuth';
 import { assetAdminApi } from '../auth/supabase';
+import { getLiveAssets } from '../api/endpoints';
 
 const EDITABLE_FIELDS = ['type', 'status', 'current_site_id', 'current_operator_id', 'rental_rate_per_day', 'idle_cost_per_hour'];
 
@@ -16,9 +17,12 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     setStatus('loading'); setError('');
-    try { setAssets(await assetAdminApi.list(session.access_token)); setStatus('ready'); }
+    try {
+      setAssets(session.demo ? await getLiveAssets() : await assetAdminApi.list(session.access_token));
+      setStatus('ready');
+    }
     catch (err) { setError(err.message); setStatus('error'); }
-  }, [session.access_token]);
+  }, [session.access_token, session.demo]);
 
   useEffect(() => {
     // Synchronize the admin table with the authenticated Supabase data source.
@@ -34,7 +38,9 @@ export default function AdminDashboard() {
       if (values[key] != null) values[key] = Number(values[key]);
     }
     try {
-      const [updated] = await assetAdminApi.update(session.access_token, editing.asset_id, values);
+      const [updated] = session.demo
+        ? [{ ...editing, ...values }]
+        : await assetAdminApi.update(session.access_token, editing.asset_id, values);
       setAssets((items) => items.map((item) => item.asset_id === updated.asset_id ? updated : item));
       setEditing(null); setStatus('ready');
     } catch (err) { setError(err.message); setStatus('error'); }

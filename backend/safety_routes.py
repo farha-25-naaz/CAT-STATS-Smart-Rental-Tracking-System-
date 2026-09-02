@@ -61,10 +61,16 @@ async def safety_override(body: SafetyOverrideRequest):
         raise HTTPException(
             status_code=404, detail=f"Asset {body.asset_id} not found"
         )
+    # PIN is valid at this point. If the asset isn't actually locked out there is
+    # nothing to clear — tell the client to just close the modal, don't touch
+    # status and don't broadcast (avoids a spurious LOCKOUT_CLEARED on a
+    # double-tap / PIN re-entry).
     if asset[0].get("status") != "SAFETY_LOCKOUT":
-        raise HTTPException(
-            status_code=409, detail="Asset is not currently locked out"
-        )
+        return {
+            "status": "nothing_to_override",
+            "asset_id": body.asset_id,
+            "message": "Nothing to override",
+        }
 
     now = _now_iso()
 

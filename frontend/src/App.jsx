@@ -86,6 +86,8 @@ function CustomerDashboard({ profile, onLogout }) {
   const criticalCount = assets.filter(a => a.status === 'CRITICAL_ALERT').length;
   const warningCount = assets.filter(a => a.status === 'IDLE_WARNING').length;
   const activeCount = assets.filter(a => a.status === 'ACTIVE').length;
+  const overdueCount = assets.filter(a => a.status === 'OVERDUE').length;
+  const unassignedCount = assets.filter(a => a.status === 'UNASSIGNED').length;
 
   const handleSelectAssetAndGoToMap = (asset) => {
     setSelectedAsset(asset);
@@ -282,7 +284,7 @@ function CustomerDashboard({ profile, onLogout }) {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-neutral-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span className="text-[11px]">Active: <strong className="text-white">{activeCount}</strong></span>
+              <span className="text-[11px]">Healthy: <strong className="text-white">{activeCount}</strong></span>
             </div>
             <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-amber-400">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
@@ -291,6 +293,14 @@ function CustomerDashboard({ profile, onLogout }) {
             <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-rose-400">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
               <span className="text-[11px]">Hazards: <strong className="text-white">{criticalCount}</strong></span>
+            </div>
+            <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-orange-400">
+              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+              <span className="text-[11px]">Overdue: <strong className="text-white">{overdueCount}</strong></span>
+            </div>
+            <div className="flex items-center space-x-1.5 bg-[#181818] border border-[#262626] px-3 py-1.5 rounded-xl text-neutral-400">
+              <span className="w-2 h-2 rounded-full bg-neutral-500"></span>
+              <span className="text-[11px]">Unassigned: <strong className="text-white">{unassignedCount}</strong></span>
             </div>
             <button onClick={onLogout} className="flex items-center gap-1.5 bg-[#181818] border border-[#333] px-3 py-1.5 rounded-xl text-neutral-300 hover:text-white cursor-pointer" title={profile?.email || 'Sign out'}><LogOut className="w-3.5 h-3.5" />Sign out</button>
           </div>

@@ -37,27 +37,44 @@ export default function SafetyLockoutModal({ isOpen, onClose, violatedAsset, onC
       return;
     }
     setSubmitting(true);
+
+    const closeSoon = (delay) => {
+      closeTimerRef.current = window.setTimeout(() => {
+        setIsResolved(false);
+        setErrorMessage('');
+        setOverridePin('');
+        setResolutionNote('');
+        onClose();
+      }, delay);
+    };
+
     try {
-      await safetyOverride({
+      const result = await safetyOverride({
         asset_id: assetId,
         supervisor_id: supervisorId,
         pin: overridePin,
         resolution_note: resolutionNote,
         resume_status: 'ACTIVE',
       });
+
+      // PIN was valid but there was nothing locked to clear — just close.
+      if (result && result.status === 'nothing_to_override') {
+        setErrorMessage('Nothing to override — closing.');
+        closeSoon(900);
+        return;
+      }
+
       setIsResolved(true);
       onCleared?.(assetId);
-      closeTimerRef.current = window.setTimeout(() => {
-        setIsResolved(false);
-        setOverridePin('');
-        setResolutionNote('');
-        onClose();
-      }, 1200);
+      closeSoon(1200);
     } catch (err) {
       if (err.status === 401) {
         setErrorMessage('Invalid supervisor ID or PIN.');
       } else if (err.status === 409) {
-        setErrorMessage('This asset is not in a lockout state — nothing to override. You can close this dialog.');
+        // Older backend signals "nothing to override" as a 409 — treat it the
+        // same way: valid attempt, nothing to do, close the dialog.
+        setErrorMessage('Nothing to override — closing.');
+        closeSoon(900);
       } else {
         setErrorMessage(err.message || 'Override failed');
       }

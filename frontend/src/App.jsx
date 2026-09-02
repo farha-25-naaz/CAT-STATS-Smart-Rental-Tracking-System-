@@ -15,13 +15,17 @@ import {
   Radio,
   HardHat
 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import { useAuth } from './auth/useAuth';
+import LoginPage from './components/LoginPage';
+import AdminDashboard from './components/AdminDashboard';
 
 const LiveFlightMap = React.lazy(() => import('./components/LiveFlightMap'));
 const AnalyticsAndForecast = React.lazy(() => import('./components/AnalyticsAndForecast'));
 const CheckInOutModal = React.lazy(() => import('./components/CheckInOutModal'));
 const AssetQrSheet = React.lazy(() => import('./components/AssetQrSheet'));
 
-export default function App() {
+function CustomerDashboard({ profile, onLogout }) {
   const [isLiveStreaming, setIsLiveStreaming] = useState(true);
   const { assets, setAssets, sites, status: fleetStatus, error: fleetError, refetch } = useFleet({
     polling: isLiveStreaming,
@@ -265,7 +269,7 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-bold text-white">Apex Infra Logistics Corp</h2>
+                <h2 className="text-sm font-bold text-white">{profile?.organization_name || 'Apex Infra Logistics Corp'}</h2>
                 <span className="text-[10px] bg-[#222] text-neutral-400 px-2 py-0.5 rounded font-mono">Contract #CAT-2026-98</span>
               </div>
               <p className="text-[11px] text-neutral-400">
@@ -288,6 +292,7 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
               <span className="text-[11px]">Hazards: <strong className="text-white">{criticalCount}</strong></span>
             </div>
+            <button onClick={onLogout} className="flex items-center gap-1.5 bg-[#181818] border border-[#333] px-3 py-1.5 rounded-xl text-neutral-300 hover:text-white cursor-pointer" title={profile?.email || 'Sign out'}><LogOut className="w-3.5 h-3.5" />Sign out</button>
           </div>
         </header>
 
@@ -401,4 +406,12 @@ export default function App() {
       />}
     </div>
   );
+}
+
+export default function App() {
+  const { loading, session, profile, logout } = useAuth();
+  if (loading) return <div className="min-h-dvh bg-[#0c0c0c] text-neutral-400 flex items-center justify-center text-sm">Loading secure workspace…</div>;
+  if (!session || !profile) return <LoginPage />;
+  if (profile.role === 'cat_admin') return <AdminDashboard />;
+  return <CustomerDashboard profile={profile} onLogout={logout} />;
 }
